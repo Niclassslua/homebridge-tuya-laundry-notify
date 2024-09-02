@@ -51,7 +51,7 @@ export class LaundryDeviceTracker {
             service?.setCharacteristic(this.api.hap.Characteristic.On, true);
           }
           if (this.config.syncWith) {
-            this.sendPower(this.config.syncWith, false);
+            this.sendPower(this.config.syncWith, true);
           }
         }
       }
