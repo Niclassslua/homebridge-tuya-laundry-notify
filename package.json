@@ -1,7 +1,7 @@
 {
   "displayName": "Tuya Landry Notifications",
   "name": "homebridge-tuya-laundry-notify",
-  "version": "1.1.0",
+  "version": "2.0.0-beta",
   "description": "Allows washer/dryer cycle completion notifications using Tuya smart plugs with power meter and Pushed.co.",
   "license": "Apache-2.0",
   "repository": {
@@ -31,23 +31,28 @@
     "homebridge-plugin"
   ],
   "dependencies": {
+    "async-await-retry": "^2.1.0",
     "axios": "^0.21.1",
     "form-data": "^4.0.0",
     "luxon": "^2.0.2",
+    "node-telegram-bot-api": "^0.66.0",
     "table": "^6.7.1",
     "tuyapi": "^7.2.0",
+    "uuid": "^10.0.0",
     "yargs": "^17.1.1"
   },
   "devDependencies": {
     "@types/jest": "^27.0.1",
     "@types/luxon": "^2.0.1",
-    "@types/node": "^14.14.31",
+    "@types/node": "^14.18.63",
+    "@types/node-telegram-bot-api": "^0.64.7",
     "@types/npmlog": "^4.1.3",
     "@types/yargs": "^17.0.2",
     "@typescript-eslint/eslint-plugin": "^4.16.1",
     "@typescript-eslint/parser": "^4.16.1",
     "eslint": "^7.21.0",
-    "homebridge": "^1.3.1",
+    "homebridge": "^1.8.4",
+    "homebridge-config-ui-x": "^4.57.1",
     "jest": "^27.1.0",
     "nodemon": "^2.0.7",
     "rimraf": "^3.0.2",

@@ -1,9 +1,11 @@
-import { LaundryDeviceConfig } from '../interfaces/notifyConfig';
+import {LaundryDeviceConfig} from '../interfaces/notifyConfig';
 import {PushGateway} from './pushGateway';
 import {DeviceData} from 'tuyapi';
 import {API, Logger, PlatformAccessory} from 'homebridge';
-import { DateTime } from 'luxon';
+import {DateTime} from 'luxon';
 import {LaundryDevice} from './laundryDevice';
+import TuyaOpenAPI from '../core/TuyaOpenAPI';
+import {MessageGateway} from './messageGateway';
 
 export class LaundryDeviceTracker {
   private device?: LaundryDevice;
@@ -17,9 +19,10 @@ export class LaundryDeviceTracker {
 
   constructor(
     public readonly log: Logger,
-    public readonly pushGateway: PushGateway,
+    public readonly messageGateway: MessageGateway,
     public config: LaundryDeviceConfig,
     public api: API,
+    public tuyaAPI: TuyaOpenAPI,
   ) {
   }
 
@@ -28,10 +31,10 @@ export class LaundryDeviceTracker {
       throw new Error('startValue cannot be lower than endValue.');
     }
 
-    this.device = new LaundryDevice(this.log, this.config.id, this.config.key, this.config.name);
+    this.device = new LaundryDevice(this.log, this.config.id, this.tuyaAPI, this.config.name);
 
-    this.device.on('data', (data: DeviceData) => {
-      this.incomingData(data);
+    this.device.on('data', (powerValue: number) => {
+      this.incomingData(powerValue);
     });
 
     this.device.on('refresh', () => {
@@ -40,12 +43,15 @@ export class LaundryDeviceTracker {
         if (secondsDiff > this.config.startDuration) {
           this.log.info(`${this.config.name} started the job!`);
           if (this.config.startMessage) {
-            this.pushGateway.send(this.config.startMessage);
+            this.messageGateway.send(this.config.startMessage);
           }
           this.isActive = true;
           if (this.config.exposeStateSwitch && this.accessory) {
             const service = this.accessory.getService(this.api.hap.Service.Switch);
             service?.setCharacteristic(this.api.hap.Characteristic.On, true);
+          }
+          if (this.config.syncWith) {
+            this.sendPower(this.config.syncWith, false);
           }
         }
       }
@@ -55,13 +61,16 @@ export class LaundryDeviceTracker {
           this.log.info(`${this.config.name} finished the job!`);
           // send push here if needed
           if (this.config.endMessage) {
-            this.pushGateway.send(this.config.endMessage);
+            this.messageGateway.send(this.config.endMessage);
           }
           if (this.config.exposeStateSwitch && this.accessory) {
             const service = this.accessory.getService(this.api.hap.Service.Switch);
             service?.setCharacteristic(this.api.hap.Characteristic.On, false);
           }
           this.isActive = false;
+          if (this.config.syncWith) {
+            this.sendPower(this.config.syncWith, false);
+          }
         }
       }
     });
@@ -69,31 +78,31 @@ export class LaundryDeviceTracker {
     this.device.init();
   }
 
-  private incomingData(data: DeviceData) {
-    if (data.dps[this.config.powerValueId] !== undefined) {
-      const value = data.dps[this.config.powerValueId];
-
-      if (value > this.config.startValue) {
-        if (!this.isActive && !this.startDetected) {
-          this.startDetected = true;
-          this.startDetectedTime = DateTime.now();
-          this.log.debug(`Detected start value, waiting for ${this.config.startDuration} seconds...`);
-        }
-      } else {
-        this.startDetected = false;
-        this.startDetectedTime = undefined;
+  private incomingData(value: number) {
+    if (value > this.config.startValue) {
+      if (!this.isActive && !this.startDetected) {
+        this.startDetected = true;
+        this.startDetectedTime = DateTime.now();
+        this.log.debug(`Detected start value, waiting for ${this.config.startDuration} seconds...`);
       }
-
-      if (value < this.config.endValue) {
-        if (this.isActive && !this.endDetected) {
-          this.endDetected = true;
-          this.endDetectedTime = DateTime.now();
-          this.log.debug(`Detected end value, waiting for ${this.config.startDuration} seconds...`);
-        }
-      } else {
-        this.endDetected = false;
-        this.endDetectedTime = undefined;
-      }
+    } else {
+      this.startDetected = false;
+      this.startDetectedTime = undefined;
     }
+
+    if (value < this.config.endValue) {
+      if (this.isActive && !this.endDetected) {
+        this.endDetected = true;
+        this.endDetectedTime = DateTime.now();
+        this.log.debug(`Detected end value, waiting for ${this.config.startDuration} seconds...`);
+      }
+    } else {
+      this.endDetected = false;
+      this.endDetectedTime = undefined;
+    }
+  }
+
+  async sendPower(deviceID: string, value: boolean) {
+    await this.tuyaAPI.post(`/v1.0/devices/${deviceID}/commands`, { commands: [{ code: 'switch_1', value }] });
   }
 }

@@ -1,6 +1,12 @@
 export interface NotifyConfig {
     pushed: PushedConfig;
+    telegramBotToken: string;
     laundryDevices: LaundryDeviceConfig[];
+    accessID: string;
+    accessSecret: string;
+    countryCode: number;
+    username: string;
+    password: string;
 }
 
 export interface PushedConfig {
@@ -12,8 +18,6 @@ export interface PushedConfig {
 export interface LaundryDeviceConfig {
     name: string;
     id: string;
-    key: string;
-    powerValueId: string;
     startValue: number;
     startDuration: number;
     endValue: number;
@@ -21,4 +25,5 @@ export interface LaundryDeviceConfig {
     startMessage?: string;
     endMessage: string;
     exposeStateSwitch?: boolean;
+    syncWith?: string;
 }
