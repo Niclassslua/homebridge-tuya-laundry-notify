@@ -1,14 +1,11 @@
 import {LaundryDeviceConfig} from '../interfaces/notifyConfig';
-import {PushGateway} from './pushGateway';
-import {DeviceData} from 'tuyapi';
 import {API, Logger, PlatformAccessory} from 'homebridge';
 import {DateTime} from 'luxon';
-import {LaundryDevice} from './laundryDevice';
 import TuyaOpenAPI from '../core/TuyaOpenAPI';
 import {MessageGateway} from './messageGateway';
+import {TuyaMQTTProtocol} from '../core/TuyaOpenMQ';
 
 export class LaundryDeviceTracker {
-  private device?: LaundryDevice;
   private startDetected?: boolean;
   private startDetectedTime?: DateTime;
   private isActive?: boolean;
@@ -26,24 +23,18 @@ export class LaundryDeviceTracker {
   ) {
   }
 
-  public init() {
+  public async init() {
     if (this.config.startValue < this.config.endValue) {
       throw new Error('startValue cannot be lower than endValue.');
     }
 
-    this.device = new LaundryDevice(this.log, this.config.id, this.tuyaAPI, this.config.name);
-
-    this.device.on('data', (powerValue: number) => {
-      this.incomingData(powerValue);
-    });
-
-    this.device.on('refresh', () => {
+    setInterval(async () => {
       if (!this.isActive && this.startDetected && this.startDetectedTime) {
         const secondsDiff = DateTime.now().diff(this.startDetectedTime, 'seconds').seconds;
         if (secondsDiff > this.config.startDuration) {
           this.log.info(`${this.config.name} started the job!`);
           if (this.config.startMessage) {
-            this.messageGateway.send(this.config.startMessage);
+            await this.messageGateway.send(this.config.startMessage);
           }
           this.isActive = true;
           if (this.config.exposeStateSwitch && this.accessory) {
@@ -51,7 +42,7 @@ export class LaundryDeviceTracker {
             service?.setCharacteristic(this.api.hap.Characteristic.On, true);
           }
           if (this.config.syncWith) {
-            this.sendPower(this.config.syncWith, true);
+            await this.sendPower(this.config.syncWith, true);
           }
         }
       }
@@ -61,7 +52,7 @@ export class LaundryDeviceTracker {
           this.log.info(`${this.config.name} finished the job!`);
           // send push here if needed
           if (this.config.endMessage) {
-            this.messageGateway.send(this.config.endMessage);
+            await this.messageGateway.send(this.config.endMessage);
           }
           if (this.config.exposeStateSwitch && this.accessory) {
             const service = this.accessory.getService(this.api.hap.Service.Switch);
@@ -69,13 +60,43 @@ export class LaundryDeviceTracker {
           }
           this.isActive = false;
           if (this.config.syncWith) {
-            this.sendPower(this.config.syncWith, false);
+            await this.sendPower(this.config.syncWith, false);
           }
         }
       }
-    });
+    }, 1000);
 
-    this.device.init();
+    await this.getInitialDeviceInfo();
+  }
+
+  public onMQTTMessage(topic: string, protocol: TuyaMQTTProtocol, message) {
+    switch(protocol) {
+      case TuyaMQTTProtocol.DEVICE_STATUS_UPDATE: {
+        const {devId, status} = message;
+        if (devId === this.config.id) {
+          const currPower = status.find((property) => property.code === 'cur_power');
+          if (currPower) {
+            this.incomingData(currPower.value);
+          }
+        }
+        break;
+      }
+    }
+  }
+
+  private async getInitialDeviceInfo() {
+    try {
+      const response = await this.tuyaAPI.get(`/v1.0/devices/${this.config.id}`);
+      if (response.result && response.result.status) {
+        const currPower = response.result.status.find((property) => property.code === 'cur_power');
+        if (currPower) {
+          this.log.info(`Connected to ${this.config.name}`);
+        }
+      }
+    } catch (error) {
+      this.log.error(`Could not get device ${this.config.name}`, error.message);
+      throw error;
+    }
   }
 
   private incomingData(value: number) {

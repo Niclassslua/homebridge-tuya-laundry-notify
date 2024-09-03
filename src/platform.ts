@@ -5,6 +5,7 @@ import {PLATFORM_NAME, PLUGIN_NAME} from './settings';
 import TuyaOpenAPI, {LOGIN_ERROR_MESSAGES} from './core/TuyaOpenAPI';
 import {LaundryDeviceTracker} from './lib/laundryDeviceTracker';
 import {MessageGateway} from './lib/messageGateway';
+import TuyaOpenMQ from './core/TuyaOpenMQ';
 
 let Accessory: typeof PlatformAccessory;
 
@@ -58,10 +59,13 @@ export class TuyaLaundryNotifyPlatform implements IndependentPlatformPlugin {
       return;
     }
 
+    const mq = new TuyaOpenMQ(tuyaAPI, this.log);
+
     this.log.info('Connecting to Laundry Devices...');
 
     if (this.typedConfig.laundryDevices) {
       for (const laundryDevice of this.laundryDevices) {
+        mq.addMessageListener(laundryDevice.onMQTTMessage.bind(laundryDevice));
         try {
           const uuid = this.api.hap.uuid.generate(laundryDevice.config.name);
           const cachedAccessory = this.accessories.find(accessory => accessory.UUID === uuid);
@@ -75,12 +79,15 @@ export class TuyaLaundryNotifyPlatform implements IndependentPlatformPlugin {
               laundryDevice.accessory = cachedAccessory;
             }
           }
-          laundryDevice.init();
+          await laundryDevice.init();
         } catch (error) {
           this.log.error(`Failed to init ${laundryDevice.config.name}`, error);
         }
       }
     }
+
+    this.log.info('Starting MQTT...');
+    mq.start();
   }
 
   configureAccessory(accessory: PlatformAccessory): void {
