@@ -28,7 +28,12 @@ export class LaundryDeviceTracker {
       throw new Error('startValue cannot be lower than endValue.');
     }
 
-    setInterval(async () => {
+    await this.getInitialDeviceInfo();
+    await this.refresh()
+  }
+
+  private async refresh() {
+    try {
       if (!this.isActive && this.startDetected && this.startDetectedTime) {
         const secondsDiff = DateTime.now().diff(this.startDetectedTime, 'seconds').seconds;
         if (secondsDiff > this.config.startDuration) {
@@ -64,9 +69,11 @@ export class LaundryDeviceTracker {
           }
         }
       }
-    }, 1000);
+    } catch (e) {
+      this.log.error('Refresh error:', e.message);
+    }
 
-    await this.getInitialDeviceInfo();
+    setTimeout(async () => await this.refresh(), 1000);
   }
 
   public onMQTTMessage(topic: string, protocol: TuyaMQTTProtocol, message) {
