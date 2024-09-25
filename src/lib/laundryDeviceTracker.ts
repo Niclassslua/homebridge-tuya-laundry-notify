@@ -60,7 +60,6 @@ export class LaundryDeviceTracker {
         const secondsDiff = DateTime.now().diff(this.endDetectedTime, 'seconds').seconds;
         if (secondsDiff > this.config.endDuration) {
           this.log.info(`${this.config.name} finished the job!`);
-          // send push here if needed
           if (this.config.endMessage) {
             await this.messageGateway.send(this.config.endMessage);
           }
@@ -75,9 +74,13 @@ export class LaundryDeviceTracker {
         }
       }
     } catch (e) {
-      this.log.error('Refresh error:', e.message);
+      if (e instanceof Error) {
+        this.log.error('Refresh error:', e.message);
+      } else {
+        this.log.error('Refresh error:', String(e));
+      }
     }
-
+  
     setTimeout(async () => await this.refresh(), 1000);
   }
 
@@ -106,7 +109,11 @@ export class LaundryDeviceTracker {
         }
       }
     } catch (error) {
-      this.log.error(`Could not get device ${this.config.name}`, error.message);
+      if (error instanceof Error) {
+        this.log.error(`Could not get device ${this.config.name}`, error.message);
+      } else {
+        this.log.error(`Could not get device ${this.config.name}`, String(error));
+      }
       throw error;
     }
   }
