@@ -4,12 +4,11 @@ import { IndependentPlatformPlugin } from 'homebridge/lib/api';
 import { PLATFORM_NAME, PLUGIN_NAME } from './settings';
 import { LaundryDeviceTracker } from './lib/laundryDeviceTracker';
 import { MessageGateway } from './lib/messageGateway';
-import TuyaOpenMQ from './core/TuyaOpenMQ';
 
-// Importieren des TuyaContext
-import { TuyaContext } from '@tuyapi/tuya-connector';
+// Importiere den TuyaContext aus dem richtigen Paket
+import { TuyaContext } from '@tuya/tuya-connector-nodejs';
 
-// IPC-bezogene Importe
+// Weitere Importe
 import net from 'net';
 import os from 'os';
 import path from 'path';
@@ -58,8 +57,16 @@ export class TuyaLaundryNotifyPlatform implements IndependentPlatformPlugin {
 
     this.api.on('didFinishLaunching', async () => {
       this.log.info('Homebridge ist gestartet, beginne mit der Initialisierung.');
+      await this.connect();
       this.startIPCServer();
     });
+  }
+
+  private async connect() {
+    // Hier können wir die Authentifizierung mit der Tuya Cloud durchführen, falls erforderlich
+    // `@tuya/tuya-connector-nodejs` kümmert sich um die Token-Verwaltung
+    this.log.info('Verbinde mit der Tuya Cloud...');
+    // Keine zusätzliche Aktion erforderlich
   }
 
   configureAccessory(accessory: PlatformAccessory): void {
@@ -116,11 +123,17 @@ export class TuyaLaundryNotifyPlatform implements IndependentPlatformPlugin {
 
       if (response.success) {
         const devices = response.result;
+        // Alle Geräte ausgeben, um die verfügbaren Kategorien zu prüfen
+        this.log.info(`Alle Geräte: ${JSON.stringify(devices)}`);
 
-        // Filtern der Geräte nach Kategorie 'cz' (Steckdosen)
-        const smartPlugs = devices.filter(device => device.category === 'cz');
+        // Filtere die Geräte nach Smart Plugs
+        const smartPlugs = devices.filter((device: any) => {
+          // Hier filtern wir nach der Kategorie 'cz', die für Steckdosen steht
+          // Passe die Kategorie an, falls deine Geräte eine andere Kategorie haben
+          return device.category === 'cz';
+        });
 
-        return smartPlugs.map(plug => ({
+        return smartPlugs.map((plug: any) => ({
           name: plug.name,
           id: plug.id,
         }));
@@ -129,7 +142,7 @@ export class TuyaLaundryNotifyPlatform implements IndependentPlatformPlugin {
         return [];
       }
     } catch (error) {
-      this.log.error(`Exception beim Abrufen der Geräte: ${error}`);
+      this.log.error(`Exception beim Abrufen der Geräte: ${error.message}`);
       return [];
     }
   }
