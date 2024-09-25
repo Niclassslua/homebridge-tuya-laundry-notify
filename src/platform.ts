@@ -174,6 +174,7 @@ export class TuyaLaundryNotifyPlatform implements IndependentPlatformPlugin {
 
   private isSmartPlug(accessory: PlatformAccessory) {
     return accessory.services.some(service => {
+      this.log.info(service.UUID, service.name, service.displayName);
       return service.UUID === this.api.hap.Service.Outlet.UUID;
     });
   }
