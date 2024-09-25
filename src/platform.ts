@@ -160,6 +160,7 @@ export class TuyaLaundryNotifyPlatform implements IndependentPlatformPlugin {
   }
 
   private getSmartPlugs() {
+    this.log.info(JSON.stringify(this.accessories));
     const smartPlugs = this.filterSmartPlugs(this.accessories);
 
     return smartPlugs.map(plug => ({
