@@ -4,6 +4,7 @@ import { IndependentPlatformPlugin } from 'homebridge/lib/api';
 import { PLATFORM_NAME, PLUGIN_NAME } from './settings';
 import { LaundryDeviceTracker } from './lib/laundryDeviceTracker';
 import { MessageGateway } from './lib/messageGateway';
+import TuyaOpenAPI, { LOGIN_ERROR_MESSAGES } from './core/TuyaOpenAPI';
 
 // Importiere den TuyaContext aus dem richtigen Paket
 import { TuyaContext } from '@tuya/tuya-connector-nodejs';
