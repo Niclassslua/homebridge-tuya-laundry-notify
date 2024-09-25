@@ -1,12 +1,12 @@
 export interface NotifyConfig {
-    pushed: PushedConfig;
-    telegramBotToken: string;
-    laundryDevices: LaundryDeviceConfig[];
-    accessID: string;
-    accessSecret: string;
-    countryCode: number;
-    username: string;
-    password: string;
+    pushed?: PushedConfig;
+    telegramBotToken?: string;
+    laundryDevices?: LaundryDeviceConfig[];
+    accessId?: string;
+    accessKey?: string;
+    countryCode?: number;
+    username?: string;
+    password?: string;
 }
 
 export interface PushedConfig {

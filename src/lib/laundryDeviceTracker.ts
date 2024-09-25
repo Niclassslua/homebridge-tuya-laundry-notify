@@ -25,11 +25,16 @@ export class LaundryDeviceTracker {
 
   public async init() {
     if (this.config.startValue < this.config.endValue) {
-      throw new Error('startValue cannot be lower than endValue.');
+      throw new Error('startValue darf nicht kleiner als endValue sein.');
+    }
+
+    if (!this.config.id) {
+      this.log.warn(`Gerät ${this.config.name} hat keine ID. Initialisierung wird übersprungen.`);
+      return;
     }
 
     await this.getInitialDeviceInfo();
-    await this.refresh()
+    await this.refresh();
   }
 
   private async refresh() {

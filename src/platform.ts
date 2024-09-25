@@ -26,17 +26,19 @@ export class TuyaLaundryNotifyPlatform implements IndependentPlatformPlugin {
 
     const {accessId, accessKey, countryCode} = this.typedConfig;
     const tuyaAPI = new TuyaOpenAPI(
-      TuyaOpenAPI.getDefaultEndpoint(countryCode),
-      accessId,
-      accessKey,
+      TuyaOpenAPI.getDefaultEndpoint((countryCode || 0)),
+      accessId || '',
+      accessKey || '',
       this.log,
       'en',
       false);
 
-    if (this.typedConfig.laundryDevices) {
+    if (this.typedConfig.laundryDevices && this.typedConfig.laundryDevices.length > 0) {
       for (const laundryDevice of this.typedConfig.laundryDevices) {
         this.laundryDevices.push(new LaundryDeviceTracker(log, messageGateway, laundryDevice, api, tuyaAPI));
       }
+    } else {
+      this.log.warn('Keine Wäschegeräte konfiguriert. Bitte füge "laundryDevices" zu deiner Konfiguration hinzu.');
     }
 
     this.api.on('didFinishLaunching', async () => {
@@ -45,13 +47,18 @@ export class TuyaLaundryNotifyPlatform implements IndependentPlatformPlugin {
   }
 
   private async connect(tuyaAPI: TuyaOpenAPI) {
-    this.log.info('Connecting to Tuya Cloud...');
+    this.log.info('Verbinde mit der Tuya Cloud...');
 
-    const {countryCode, username, password} = this.typedConfig;
+    const { countryCode, username, password } = this.typedConfig;
+
+    if (!username || !password) {
+      this.log.warn('Tuya Cloud-Zugangsdaten fehlen (username oder password). Bitte aktualisiere deine Konfiguration.');
+      return; // Beende die Verbindungsmethode
+    }
 
     const res = await tuyaAPI.homeLogin(countryCode, username, password, 'tuyaSmart');
     if (!res.success) {
-      this.log.error(`Login failed. code=${res.code}, msg=${res.msg}`);
+      this.log.error(`Anmeldung fehlgeschlagen. code=${res.code}, msg=${res.msg}`);
       if (LOGIN_ERROR_MESSAGES[res.code]) {
         this.log.error(LOGIN_ERROR_MESSAGES[res.code]);
       }
@@ -61,9 +68,9 @@ export class TuyaLaundryNotifyPlatform implements IndependentPlatformPlugin {
 
     const mq = new TuyaOpenMQ(tuyaAPI, this.log);
 
-    this.log.info('Connecting to Laundry Devices...');
+    this.log.info('Verbinde mit Wäschegeräten...');
 
-    if (this.typedConfig.laundryDevices) {
+    if (this.laundryDevices.length > 0) {
       for (const laundryDevice of this.laundryDevices) {
         mq.addMessageListener(laundryDevice.onMQTTMessage.bind(laundryDevice));
         try {
@@ -81,12 +88,14 @@ export class TuyaLaundryNotifyPlatform implements IndependentPlatformPlugin {
           }
           await laundryDevice.init();
         } catch (error) {
-          this.log.error(`Failed to init ${laundryDevice.config.name}`, error);
+          this.log.error(`Fehler beim Initialisieren von ${laundryDevice.config.name}`, error);
         }
       }
+    } else {
+      this.log.warn('Keine Wäschegeräte zum Verbinden vorhanden.');
     }
 
-    this.log.info('Starting MQTT...');
+    this.log.info('Starte MQTT...');
     mq.start();
   }
 
