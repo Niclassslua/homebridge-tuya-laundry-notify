@@ -7,6 +7,12 @@ import {LaundryDeviceTracker} from './lib/laundryDeviceTracker';
 import {MessageGateway} from './lib/messageGateway';
 import TuyaOpenMQ from './core/TuyaOpenMQ';
 
+//IPC related imports
+import net from 'net';
+import os from 'os';
+import path from 'path';
+import fs from 'fs';
+
 let Accessory: typeof PlatformAccessory;
 
 export class TuyaLaundryNotifyPlatform implements IndependentPlatformPlugin {
@@ -42,6 +48,7 @@ export class TuyaLaundryNotifyPlatform implements IndependentPlatformPlugin {
     }
 
     this.api.on('didFinishLaunching', async () => {
+      this.startIPCServer();
       await this.connect(tuyaAPI);
     });
   }
@@ -111,5 +118,63 @@ export class TuyaLaundryNotifyPlatform implements IndependentPlatformPlugin {
     } else {
       this.accessories.push(accessory);
     }
+  }
+
+  private startIPCServer() {
+    const socketPath = path.join(os.tmpdir(), 'tuya-laundry.sock');
+
+    // Füge hier zusätzliche Logs hinzu, um zu sehen, ob der IPC-Server startet
+    this.log.info(`Starte den IPC-Server auf ${socketPath}`);
+
+    // Vorhandene Socket-Datei entfernen
+    if (fs.existsSync(socketPath)) {
+      this.log.info(`Entferne vorhandene Socket-Datei: ${socketPath}`);
+      fs.unlinkSync(socketPath);
+    }
+
+    const server = net.createServer((connection) => {
+      this.log.info('Verbindung über den IPC-Server erhalten');
+
+      connection.on('data', (data) => {
+        const command = data.toString().trim();
+        this.log.info(`Empfangener Befehl über IPC: ${command}`);
+
+        if (command === 'list-smartplugs') {
+          const smartPlugs = this.getSmartPlugs();
+          connection.write(JSON.stringify(smartPlugs));
+          connection.end();
+        } else {
+          connection.write('Unbekannter Befehl');
+          connection.end();
+        }
+      });
+    });
+
+    server.listen(socketPath, () => {
+      this.log.info(`IPC-Server hört auf ${socketPath}`);
+    });
+
+    server.on('error', (err: Error) => {
+      this.log.error(`Fehler beim IPC-Server: ${err.message}`);
+    });
+  }
+
+  private getSmartPlugs() {
+    const smartPlugs = this.filterSmartPlugs(this.accessories);
+
+    return smartPlugs.map(plug => ({
+      displayName: plug.displayName,
+      UUID: plug.UUID,
+    }));
+  }
+
+  private filterSmartPlugs(accessories: PlatformAccessory[]) {
+    return accessories.filter(accessory => this.isSmartPlug(accessory));
+  }
+
+  private isSmartPlug(accessory: PlatformAccessory) {
+    return accessory.services.some(service => {
+      return service.UUID === this.api.hap.Service.Outlet.UUID;
+    });
   }
 }
