@@ -11,17 +11,17 @@
             "appKey": {
               "title": "App Key",
               "type": "string",
-              "required": true
+              "required": false
             },
             "appSecret": {
               "title": "App Secret",
               "type": "string",
-              "required": true
+              "required": false
             },
             "channelAlias": {
               "title": "Channel Alias",
               "type": "string",
-              "required": true
+              "required": false
             }
           }
         },
@@ -34,47 +34,47 @@
               "name": {
                 "title": "Name",
                 "type": "string",
-                "required": true,
+                "required": false,
                 "description": "Device name, used for logging"
               },
               "id": {
                 "title": "Tuya Device ID",
                 "type": "string",
-                "required": true
+                "required": false
               },
               "key": {
                 "title": "Tuya Device Key",
                 "type": "string",
-                "required": true
+                "required": false
               },
               "powerValueId": {
                 "title": "Power Value ID",
                 "type": "string",
-                "required": true,
+                "required": false,
                 "description": "Property ID of the DPS return that represents current power value"
               },
               "startValue": {
                 "title": "Start Value",
                 "type": "number",
-                "required": true,
+                "required": false,
                 "description": "Expected power value when device started the cycle"
               },
               "startDuration": {
                 "title": "Start Duration",
                 "type": "number",
-                "required": true,
+                "required": false,
                 "description": "Duration in seconds that start value needs to hold until device is considered to be active."
               },
               "endValue": {
                 "title": "End Value",
                 "type": "number",
-                "required": true,
+                "required": false,
                 "description": "Expected power value when device finished the cycle"
               },
               "endDuration": {
                 "title": "End Duration",
                 "type": "number",
-                "required": true,
+                "required": false,
                 "description": "Duration in seconds that end value needs to hold until device is considered to be inactive."
               },
               "startMessage": {
@@ -87,7 +87,7 @@
               "endMessage": {
                 "title": "Start Message",
                 "type": "string",
-                "required": true,
+                "required": false,
                 "description": "Push message when device starts the cycle",
                 "default": "Washing finished!"
               },
