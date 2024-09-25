@@ -26,7 +26,7 @@ export class TuyaLaundryNotifyPlatform implements IndependentPlatformPlugin {
 
     const {accessId, accessKey, countryCode} = this.typedConfig;
     const tuyaAPI = new TuyaOpenAPI(
-      TuyaOpenAPI.getDefaultEndpoint((countryCode || 0)),
+      TuyaOpenAPI.getDefaultEndpoint(countryCode ?? 0),
       accessId || '',
       accessKey || '',
       this.log,
@@ -49,12 +49,16 @@ export class TuyaLaundryNotifyPlatform implements IndependentPlatformPlugin {
   private async connect(tuyaAPI: TuyaOpenAPI) {
     this.log.info('Verbinde mit der Tuya Cloud...');
 
-    const { countryCode, username, password } = this.typedConfig;
+    let { countryCode} = this.typedConfig;
+    const { username, password } = this.typedConfig;
 
     if (!username || !password) {
       this.log.warn('Tuya Cloud-Zugangsdaten fehlen (username oder password). Bitte aktualisiere deine Konfiguration.');
       return; // Beende die Verbindungsmethode
     }
+
+    // Absicherung des countryCode
+    countryCode = countryCode ?? 1; // Verwende 1 als Standardwert, falls countryCode undefined ist.
 
     const res = await tuyaAPI.homeLogin(countryCode, username, password, 'tuyaSmart');
     if (!res.success) {
