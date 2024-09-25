@@ -1,10 +1,10 @@
-import {API, Logger, PlatformAccessory, PlatformConfig} from 'homebridge';
-import {NotifyConfig} from './interfaces/notifyConfig';
-import {IndependentPlatformPlugin} from 'homebridge/lib/api';
-import {PLATFORM_NAME, PLUGIN_NAME} from './settings';
-import TuyaOpenAPI, {LOGIN_ERROR_MESSAGES} from './core/TuyaOpenAPI';
-import {LaundryDeviceTracker} from './lib/laundryDeviceTracker';
-import {MessageGateway} from './lib/messageGateway';
+import { API, Logger, PlatformAccessory, PlatformConfig } from 'homebridge';
+import { NotifyConfig } from './interfaces/notifyConfig';
+import { IndependentPlatformPlugin } from 'homebridge/lib/api';
+import { PLATFORM_NAME, PLUGIN_NAME } from './settings';
+import TuyaOpenAPI, { LOGIN_ERROR_MESSAGES } from './core/TuyaOpenAPI';
+import { LaundryDeviceTracker } from './lib/laundryDeviceTracker';
+import { MessageGateway } from './lib/messageGateway';
 import TuyaOpenMQ from './core/TuyaOpenMQ';
 
 // IPC-related imports
@@ -20,6 +20,9 @@ export class TuyaLaundryNotifyPlatform implements IndependentPlatformPlugin {
   public readonly accessories: PlatformAccessory[] = [];
   private readonly laundryDevices: LaundryDeviceTracker[] = [];
 
+  // Tuya API als Instanzvariable hinzufügen
+  private tuyaAPI: TuyaOpenAPI;
+
   constructor(
     public readonly log: Logger,
     public readonly config: PlatformConfig,
@@ -31,22 +34,23 @@ export class TuyaLaundryNotifyPlatform implements IndependentPlatformPlugin {
 
     const messageGateway = new MessageGateway(log, this.typedConfig, api);
 
-    const {accessId, accessKey, countryCode} = this.typedConfig;
+    const { accessId, accessKey, countryCode } = this.typedConfig;
     this.log.info(`Zugangsdaten: accessId=${accessId}, accessKey=${accessKey}, countryCode=${countryCode}`);
 
-    const tuyaAPI = new TuyaOpenAPI(
+    // Tuya API initialisieren und als Instanzvariable speichern
+    this.tuyaAPI = new TuyaOpenAPI(
       TuyaOpenAPI.getDefaultEndpoint(countryCode ?? 0),
       accessId || '',
       accessKey || '',
       this.log,
       'en',
-      false
+      false,
     );
 
     if (this.typedConfig.laundryDevices && this.typedConfig.laundryDevices.length > 0) {
       this.log.info('Wäschegeräte gefunden.');
       for (const laundryDevice of this.typedConfig.laundryDevices) {
-        this.laundryDevices.push(new LaundryDeviceTracker(log, messageGateway, laundryDevice, api, tuyaAPI));
+        this.laundryDevices.push(new LaundryDeviceTracker(log, messageGateway, laundryDevice, api, this.tuyaAPI));
         this.log.info(`Wäschegerät hinzugefügt: ${laundryDevice.name}`);
       }
     } else {
@@ -55,12 +59,12 @@ export class TuyaLaundryNotifyPlatform implements IndependentPlatformPlugin {
 
     this.api.on('didFinishLaunching', async () => {
       this.log.info('Homebridge ist gestartet, beginne Verbindung zu Tuya.');
+      await this.connect();
       this.startIPCServer();
-      await this.connect(tuyaAPI);
     });
   }
 
-  private async connect(tuyaAPI: TuyaOpenAPI) {
+  private async connect() {
     this.log.info('Verbinde mit der Tuya Cloud...');
 
     let { countryCode } = this.typedConfig;
@@ -74,17 +78,17 @@ export class TuyaLaundryNotifyPlatform implements IndependentPlatformPlugin {
     // Absicherung des countryCode
     countryCode = countryCode ?? 1; // Verwende 1 als Standardwert, falls countryCode undefined ist.
 
-    const res = await tuyaAPI.homeLogin(countryCode, username, password, 'tuyaSmart');
+    const res = await this.tuyaAPI.homeLogin(countryCode, username, password, 'tuyaSmart');
     if (!res.success) {
       this.log.error(`Anmeldung fehlgeschlagen. code=${res.code}, msg=${res.msg}`);
       if (LOGIN_ERROR_MESSAGES[res.code]) {
         this.log.error(LOGIN_ERROR_MESSAGES[res.code]);
       }
-      setTimeout(() => this.connect(tuyaAPI), 5000);
+      setTimeout(() => this.connect(), 5000);
       return;
     }
 
-    const mq = new TuyaOpenMQ(tuyaAPI, this.log);
+    const mq = new TuyaOpenMQ(this.tuyaAPI, this.log);
 
     this.log.info('Verbinde mit Wäschegeräten...');
 
@@ -121,16 +125,8 @@ export class TuyaLaundryNotifyPlatform implements IndependentPlatformPlugin {
 
   configureAccessory(accessory: PlatformAccessory): void {
     this.log.info(`Accessoire geladen: ${accessory.displayName}`);
-    const existingDevice = this.laundryDevices.find((laundryDevice) =>
-      this.api.hap.uuid.generate(laundryDevice.config.name) === accessory.UUID
-    );
-
-    if (!existingDevice || !existingDevice.config.exposeStateSwitch) {
-      this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
-    } else {
-      this.accessories.push(accessory);
-      this.log.info(`Accessoire hinzugefügt: ${accessory.displayName}`);
-    }
+    this.accessories.push(accessory);
+    this.log.info(`Accessoire hinzugefügt: ${accessory.displayName}`);
   }
 
   private startIPCServer() {
@@ -148,12 +144,12 @@ export class TuyaLaundryNotifyPlatform implements IndependentPlatformPlugin {
     const server = net.createServer((connection) => {
       this.log.info('Verbindung über den IPC-Server erhalten');
 
-      connection.on('data', (data) => {
+      connection.on('data', async (data) => {
         const command = data.toString().trim();
         this.log.info(`Empfangener Befehl über IPC: ${command}`);
 
         if (command === 'list-smartplugs') {
-          const smartPlugs = this.getSmartPlugs();
+          const smartPlugs = await this.getSmartPlugs();
           this.log.info(`Gefundene Smart Plugs: ${JSON.stringify(smartPlugs)}`);
           connection.write(JSON.stringify(smartPlugs));
           connection.end();
@@ -173,14 +169,29 @@ export class TuyaLaundryNotifyPlatform implements IndependentPlatformPlugin {
     });
   }
 
-  private getSmartPlugs() {
-    this.log.info(`Accessoires zum Zeitpunkt des Abrufs: ${JSON.stringify(this.accessories.map(a => a.displayName))}`);
-    const smartPlugs = this.filterSmartPlugs(this.accessories);
-
-    return smartPlugs.map(plug => ({
-      displayName: plug.displayName,
-      UUID: plug.UUID,
-    }));
+  private async getSmartPlugs() {
+    this.log.info('Hole Geräte von Tuya Cloud...');
+    try {
+      const response = await this.tuyaAPI.getDevices();
+      if (response.success) {
+        const devices = response.result;
+        // Filtere die Geräte nach Smart Plugs
+        const smartPlugs = devices.filter(device => {
+          // Hier filtern wir nach der Kategorie 'cz', die für Steckdosen steht
+          return device.category === 'cz';
+        });
+        return smartPlugs.map(plug => ({
+          name: plug.name,
+          id: plug.id,
+        }));
+      } else {
+        this.log.error(`Fehler beim Abrufen der Geräte: ${response.msg}`);
+        return [];
+      }
+    } catch (error) {
+      this.log.error(`Exception beim Abrufen der Geräte: ${error}`);
+      return [];
+    }
   }
 
   private filterSmartPlugs(accessories: PlatformAccessory[]) {
