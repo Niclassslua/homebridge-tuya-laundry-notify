@@ -7,7 +7,7 @@ import {LaundryDeviceTracker} from './lib/laundryDeviceTracker';
 import {MessageGateway} from './lib/messageGateway';
 import TuyaOpenMQ from './core/TuyaOpenMQ';
 
-//IPC related imports
+// IPC-related imports
 import net from 'net';
 import os from 'os';
 import path from 'path';
@@ -56,7 +56,7 @@ export class TuyaLaundryNotifyPlatform implements IndependentPlatformPlugin {
   private async connect(tuyaAPI: TuyaOpenAPI) {
     this.log.info('Verbinde mit der Tuya Cloud...');
 
-    let { countryCode} = this.typedConfig;
+    let { countryCode } = this.typedConfig;
     const { username, password } = this.typedConfig;
 
     if (!username || !password) {
@@ -90,11 +90,13 @@ export class TuyaLaundryNotifyPlatform implements IndependentPlatformPlugin {
           if (laundryDevice.config.exposeStateSwitch) {
             if (!cachedAccessory) {
               laundryDevice.accessory = new Accessory(laundryDevice.config.name, uuid);
-              laundryDevice.accessory.addService(this.api.hap.Service.Switch, laundryDevice.config.name);
+              laundryDevice.accessory.addService(this.api.hap.Service.Outlet, laundryDevice.config.name);
               this.accessories.push(laundryDevice.accessory);
               this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [laundryDevice.accessory]);
+              this.log.info(`Neues Accessoire registriert: ${laundryDevice.config.name}`);
             } else {
               laundryDevice.accessory = cachedAccessory;
+              this.log.info(`Accessoire aus Cache geladen: ${cachedAccessory.displayName}`);
             }
           }
           await laundryDevice.init();
@@ -111,12 +113,16 @@ export class TuyaLaundryNotifyPlatform implements IndependentPlatformPlugin {
   }
 
   configureAccessory(accessory: PlatformAccessory): void {
+    this.log.info(`Accessoire geladen: ${accessory.displayName}`);
     const existingDevice = this.laundryDevices.find((laundryDevice) =>
-      this.api.hap.uuid.generate(laundryDevice.config.name) === accessory.UUID);
+      this.api.hap.uuid.generate(laundryDevice.config.name) === accessory.UUID
+    );
+
     if (!existingDevice || !existingDevice.config.exposeStateSwitch) {
       this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
     } else {
       this.accessories.push(accessory);
+      this.log.info(`Accessoire hinzugefügt: ${accessory.displayName}`);
     }
   }
 
@@ -160,7 +166,7 @@ export class TuyaLaundryNotifyPlatform implements IndependentPlatformPlugin {
   }
 
   private getSmartPlugs() {
-    this.log.info(JSON.stringify(this.accessories));
+    this.log.info(JSON.stringify(this.accessories.map(a => a.displayName)));
     const smartPlugs = this.filterSmartPlugs(this.accessories);
 
     return smartPlugs.map(plug => ({
@@ -174,8 +180,9 @@ export class TuyaLaundryNotifyPlatform implements IndependentPlatformPlugin {
   }
 
   private isSmartPlug(accessory: PlatformAccessory) {
+    this.log.info(`Prüfe Accessoire: ${accessory.displayName}`);
     return accessory.services.some(service => {
-      this.log.info(service.UUID, service.name, service.displayName);
+      this.log.info(`Service UUID: ${service.UUID}, Name: ${service.displayName}`);
       return service.UUID === this.api.hap.Service.Outlet.UUID;
     });
   }
