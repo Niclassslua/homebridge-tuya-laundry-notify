@@ -25,29 +25,36 @@ export class TuyaLaundryNotifyPlatform implements IndependentPlatformPlugin {
     public readonly config: PlatformConfig,
     public readonly api: API,
   ) {
+    this.log.info('TuyaLaundryNotifyPlatform initialisiert.');
     this.typedConfig = config as PlatformConfig & NotifyConfig;
     Accessory = api.platformAccessory;
 
     const messageGateway = new MessageGateway(log, this.typedConfig, api);
 
     const {accessId, accessKey, countryCode} = this.typedConfig;
+    this.log.info(`Zugangsdaten: accessId=${accessId}, accessKey=${accessKey}, countryCode=${countryCode}`);
+
     const tuyaAPI = new TuyaOpenAPI(
       TuyaOpenAPI.getDefaultEndpoint(countryCode ?? 0),
       accessId || '',
       accessKey || '',
       this.log,
       'en',
-      false);
+      false
+    );
 
     if (this.typedConfig.laundryDevices && this.typedConfig.laundryDevices.length > 0) {
+      this.log.info('Wäschegeräte gefunden.');
       for (const laundryDevice of this.typedConfig.laundryDevices) {
         this.laundryDevices.push(new LaundryDeviceTracker(log, messageGateway, laundryDevice, api, tuyaAPI));
+        this.log.info(`Wäschegerät hinzugefügt: ${laundryDevice.name}`);
       }
     } else {
       this.log.warn('Keine Wäschegeräte konfiguriert. Bitte füge "laundryDevices" zu deiner Konfiguration hinzu.');
     }
 
     this.api.on('didFinishLaunching', async () => {
+      this.log.info('Homebridge ist gestartet, beginne Verbindung zu Tuya.');
       this.startIPCServer();
       await this.connect(tuyaAPI);
     });
@@ -89,11 +96,11 @@ export class TuyaLaundryNotifyPlatform implements IndependentPlatformPlugin {
           const cachedAccessory = this.accessories.find(accessory => accessory.UUID === uuid);
           if (laundryDevice.config.exposeStateSwitch) {
             if (!cachedAccessory) {
+              this.log.info(`Neues Accessoire wird erstellt für: ${laundryDevice.config.name}`);
               laundryDevice.accessory = new Accessory(laundryDevice.config.name, uuid);
               laundryDevice.accessory.addService(this.api.hap.Service.Outlet, laundryDevice.config.name);
               this.accessories.push(laundryDevice.accessory);
               this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [laundryDevice.accessory]);
-              this.log.info(`Neues Accessoire registriert: ${laundryDevice.config.name}`);
             } else {
               laundryDevice.accessory = cachedAccessory;
               this.log.info(`Accessoire aus Cache geladen: ${cachedAccessory.displayName}`);
@@ -147,6 +154,7 @@ export class TuyaLaundryNotifyPlatform implements IndependentPlatformPlugin {
 
         if (command === 'list-smartplugs') {
           const smartPlugs = this.getSmartPlugs();
+          this.log.info(`Gefundene Smart Plugs: ${JSON.stringify(smartPlugs)}`);
           connection.write(JSON.stringify(smartPlugs));
           connection.end();
         } else {
@@ -166,7 +174,7 @@ export class TuyaLaundryNotifyPlatform implements IndependentPlatformPlugin {
   }
 
   private getSmartPlugs() {
-    this.log.info(JSON.stringify(this.accessories.map(a => a.displayName)));
+    this.log.info(`Accessoires zum Zeitpunkt des Abrufs: ${JSON.stringify(this.accessories.map(a => a.displayName))}`);
     const smartPlugs = this.filterSmartPlugs(this.accessories);
 
     return smartPlugs.map(plug => ({
