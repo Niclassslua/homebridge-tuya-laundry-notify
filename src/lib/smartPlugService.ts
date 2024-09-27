@@ -28,6 +28,18 @@ export class SmartPlugService {
     }
   }
 
+  // Method to wake up the device by setting the week_up_btn DPS value
+  async wakeUpDevice(deviceId: string, wakeUpDPS: string) {
+    try {
+      await this.apiInstance.post(`/v1.0/devices/${deviceId}/commands`, {
+        commands: [{ code: wakeUpDPS, value: true }]
+      });
+      this.log.info(`Wake-up command sent to device ${deviceId}`);
+    } catch (error) {
+      this.log.error(`Error waking up device ${deviceId}: ${error.message}`);
+    }
+  }
+
   // Method to calibrate power consumption
   async calibratePowerConsumption(deviceId: string, powerValueId: string, connection: net.Socket, washDurationSeconds: number) {
     try {
@@ -45,13 +57,13 @@ export class SmartPlugService {
 
           // Sicherstellen, dass die Nachricht für das richtige Gerät ist
           if (devId === deviceId) {
-            connection.write(`Raw MQTT message: ${JSON.stringify(status, null, 2)}\n`);
+            //connection.write(`Raw MQTT message: ${JSON.stringify(status, null, 2)}\n`);
 
             const currentDPS = status.find((property) => property.code === powerValueId)?.value / 10;
 
             // Check if currentDPS is undefined or NaN
             if (currentDPS === undefined || isNaN(currentDPS)) {
-              connection.write(`Invalid power value received: ${currentDPS}. Skipping this entry.\n`);
+              //connection.write(`Invalid power value received: ${currentDPS}. Skipping this entry.\n`);
               return;
             }
 
@@ -99,6 +111,11 @@ export class SmartPlugService {
     const maxPowerValues = 20;
 
     connection.write('Tracking power consumption...\n');
+
+    // Set the wake-up interval
+    setInterval(() => {
+      this.wakeUpDevice(deviceId, 'week_up_btn');  // Send wake-up command every 60 seconds
+    }, 60000); // Every 60 seconds
 
     try {
       // Use the TuyaOpenMQ instance to listen for MQTT messages
@@ -163,7 +180,6 @@ export class SmartPlugService {
       connection.write(`Error tracking power consumption: ${error.message}\n`);
     }
   }
-
   // Method to identify power value
   async identifyPowerValue(deviceId: string, connection: net.Socket) {
     const log = this.log;
@@ -178,6 +194,8 @@ export class SmartPlugService {
     }
 
     log.info('Power on your appliance to observe the values.');
+
+    // Start interval to continuously fetch the status of the device
     setInterval(async () => {
       const statusResponse = await this.apiInstance.get(`/v1.0/devices/${deviceId}/status`);
       if (!statusResponse.success) {
@@ -185,16 +203,20 @@ export class SmartPlugService {
         return;
       }
 
+      // Update existing DPS (Data Points)
       Object.assign(existingDPS, statusResponse.result);
+
+      // Prepare data for table format
       const tableData: string[][] = [['Property ID', 'Value']];
       for (const [key, value] of Object.entries(existingDPS)) {
         const displayValue = typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value);
         tableData.push([key, displayValue]);
       }
 
+      // Output the table of DPS values
       connection.write(table(tableData));
       connection.write('Make sure the plugged-in appliance is consuming power (operating).');
       connection.write('\nOne of the values above will represent power consumption.\n');
-    }, 5000);
+    }, 5000);  // Fetch status every 5 seconds
   }
 }
