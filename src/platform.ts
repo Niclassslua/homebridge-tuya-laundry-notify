@@ -61,28 +61,37 @@ export class TuyaLaundryNotifyPlatform implements IndependentPlatformPlugin {
   }
 
   private async connect() {
-    this.log.info('Connecting to Tuya Cloud...');
+    this.log.info('Starting connection to Tuya Cloud...');
     const { accessId, accessKey, countryCode, username, password, appSchema } = this.config;
 
-    // Login to Tuya API
-    const res = await this.apiInstance.homeLogin(
-      Number(countryCode),
-      username ?? '',
-      password ?? '',
-      appSchema ?? 'tuyaSmart'
-    );
+    // Tuya API Login
+    try {
+      this.log.debug(`Attempting to log in with AccessId: ${accessId}, Username: ${username}, CountryCode: ${countryCode}`);
+      const res = await this.apiInstance.homeLogin(
+        Number(countryCode),
+        username ?? '',
+        password ?? '',
+        appSchema ?? 'tuyaSmart'
+      );
 
-    if (!res.success) {
-      this.log.error(`Login failed. code=${res.code}, msg=${res.msg}`);
-      setTimeout(() => this.connect(), 5000);
-      return;
+      if (!res.success) {
+        this.log.error(`Login failed. code=${res.code}, msg=${res.msg}`);
+        this.log.debug('Retrying login in 5 seconds due to failure.');
+        setTimeout(() => this.connect(), 5000);  // Retry after 5 seconds
+        return;
+      }
+
+      this.log.info('Login to Tuya Cloud successful.');
+      this.log.debug(`Login response: ${JSON.stringify(res)}`);
+
+      // MQTT connection setup
+      this.log.info('Starting MQTT connection for message handling...');
+      this.mqttHandler = new MQTTHandler(this.log, this.tuyaMQ);
+      this.mqttHandler.startListening();
+    } catch (error) {
+      this.log.error(`Error during Tuya Cloud login: ${error.message}`);
+      this.log.debug(`Stack trace: ${error.stack}`);
     }
-
-    this.log.info('Login to Tuya Cloud successful.');
-
-    // Initialize MQTT for message handling with the shared TuyaOpenMQ instance
-    this.mqttHandler = new MQTTHandler(this.log, this.tuyaMQ);
-    this.mqttHandler.startListening();
 
     this.log.info('Connecting to Laundry Devices...');
     for (const laundryDevice of this.laundryDevices) {
@@ -91,17 +100,21 @@ export class TuyaLaundryNotifyPlatform implements IndependentPlatformPlugin {
         const cachedAccessory = this.accessories.find(accessory => accessory.UUID === uuid);
         if (laundryDevice.config.exposeStateSwitch) {
           if (!cachedAccessory) {
+            this.log.debug(`Registering new accessory for ${laundryDevice.config.name}`);
             laundryDevice.accessory = new this.api.platformAccessory(laundryDevice.config.name, uuid);
             laundryDevice.accessory.addService(this.api.hap.Service.Switch, laundryDevice.config.name);
             this.accessories.push(laundryDevice.accessory);
             this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [laundryDevice.accessory]);
           } else {
+            this.log.debug(`Found cached accessory for ${laundryDevice.config.name}`);
             laundryDevice.accessory = cachedAccessory;
           }
         }
         await laundryDevice.init();
+        this.log.info(`Successfully connected to device: ${laundryDevice.config.name}`);
       } catch (error) {
-        this.log.error(`Failed to init ${laundryDevice.config.name}`, error);
+        this.log.error(`Failed to connect to ${laundryDevice.config.name}: ${error.message}`);
+        this.log.debug(`Stack trace: ${error.stack}`);
       }
     }
   }
