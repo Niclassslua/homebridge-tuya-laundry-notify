@@ -36,21 +36,38 @@ export class SmartPlugService {
       const activeValues: number[] = [];
       const inactiveMedian = 0;  // Assume no power consumption at the start
 
-      // Use the TuyaOpenMQ instance to listen for MQTT messages
+      // Verwende die TuyaOpenMQ-Instanz, um auf MQTT-Nachrichten zu lauschen
       this.tuyaMQ.addMessageListener((topic: string, protocol: TuyaMQTTProtocol, message: any) => {
+        connection.write('Received message... Any Type\n');
+
         if (protocol === TuyaMQTTProtocol.DEVICE_STATUS_UPDATE) {
           const { devId, status } = message;
+
+          // Sicherstellen, dass die Nachricht für das richtige Gerät ist
           if (devId === deviceId) {
+            connection.write(`Raw MQTT message: ${JSON.stringify(status, null, 2)}\n`);
+
             const currentDPS = status.find((property) => property.code === powerValueId)?.value / 10;
-            if (currentDPS !== undefined) {
-              activeValues.push(currentDPS);
-              this.log.debug(`Calibration data received. Current DPS: ${currentDPS}`);
+
+            // Check if currentDPS is undefined or NaN
+            if (currentDPS === undefined || isNaN(currentDPS)) {
+              connection.write(`Invalid power value received: ${currentDPS}. Skipping this entry.\n`);
+              return;
             }
+
+            connection.write(`Raw power value (DPS): ${status.find((property) => property.code === powerValueId)?.value}\n`);
+            connection.write(`Received DPS: ${currentDPS.toFixed(2)} Watt\n`);
+
+            // Add the valid power value to the list
+            activeValues.push(currentDPS);
+            this.log.debug(`Calibration data received. Current DPS: ${currentDPS}`);
+          } else {
+            this.log.warn(`Received data for a different device. Expected: ${deviceId}, Received: ${devId}`);
           }
         }
       });
 
-      // Wait for the washing duration to complete
+      // Warten auf die Dauer des Waschgangs
       setTimeout(() => {
         if (activeValues.length === 0) {
           connection.write(`No power values received for calibration.\n`);
@@ -86,6 +103,7 @@ export class SmartPlugService {
     try {
       // Use the TuyaOpenMQ instance to listen for MQTT messages
       this.tuyaMQ.addMessageListener((topic: string, protocol: TuyaMQTTProtocol, message: any) => {
+        connection.write('Received message... Any Type\n');
         // Filter only relevant messages
         if (protocol === TuyaMQTTProtocol.DEVICE_STATUS_UPDATE) {
           const { devId, status } = message;
@@ -93,7 +111,7 @@ export class SmartPlugService {
           // Ensure the message is for the correct device
           if (devId === deviceId) {
 
-            connection.write(`Raw MQTT message: ${status}`);
+            connection.write(`Raw MQTT message: ${JSON.stringify(status, null, 2)}\n`);
 
             const currentDPS = status.find((property) => property.code === powerValueId)?.value / 10;
 
@@ -103,7 +121,7 @@ export class SmartPlugService {
               return;
             }
 
-            connection.write(`Raw power value (DPS): ${status.find((property) => property.code === powerValueId)?.value}`);
+            connection.write(`Raw power value (DPS): ${status.find((property) => property.code === powerValueId)?.value}\n`);
             connection.write(`Received DPS: ${currentDPS.toFixed(2)} Watt\n`);
 
             // Add the valid power value to the list
@@ -116,7 +134,7 @@ export class SmartPlugService {
             const averagePower = powerValues.reduce((sum, val) => sum + val, 0) / powerValues.length;
 
             // Debugging: Log the calculated average power
-            connection.write(`Power values: ${powerValues}`);
+            connection.write(`Power values: ${powerValues}\n`);
             connection.write(`Calculated average power: ${averagePower.toFixed(2)} Watt\n`);
 
             // Dynamic thresholds and state changes
@@ -124,7 +142,7 @@ export class SmartPlugService {
               startThreshold = averagePower + Math.max(...powerValues) * 0.2;
               stopThreshold = averagePower * 0.8;
 
-              connection.write(`Start threshold: ${startThreshold}, Stop threshold: ${stopThreshold}`);
+              connection.write(`Start threshold: ${startThreshold}, Stop threshold: ${stopThreshold}\n`);
 
               if (currentState === 'inactive' && currentDPS > startThreshold) {
                 currentState = 'active';
