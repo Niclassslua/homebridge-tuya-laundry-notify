@@ -1,6 +1,5 @@
 import { Logger } from 'homebridge';
 import TuyAPI from 'tuyapi';
-import { TuyaDiscovery } from 'tuyapi';  // Import TuyaDiscovery for device discovery
 import net from 'net';
 import dgram from 'dgram';
 import crypto from 'crypto';

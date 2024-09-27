@@ -85,7 +85,7 @@ export class TuyaLaundryNotifyPlatform implements IndependentPlatformPlugin {
   // Manage accessories (Homebridge specific logic)
   configureAccessory(accessory: PlatformAccessory): void {
     const existingDevice = this.laundryDevices.find(laundryDevice =>
-      this.api.hap.uuid.generate(laundryDevice.config.name) === accessory.UUID
+      this.api.hap.uuid.generate(laundryDevice.config.name || 'Unnamed Device') === accessory.UUID // Fallback für undefined name
     );
 
     if (!existingDevice || !existingDevice.config.exposeStateSwitch) {

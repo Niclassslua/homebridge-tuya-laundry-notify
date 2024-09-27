@@ -34,4 +34,5 @@ export interface LaundryDeviceConfig {
     startMessage?: string;       // Message sent when the cycle starts
     endMessage?: string;         // Message sent when the cycle ends
     exposeStateSwitch?: boolean; // Expose switch for automation
+    protocolVersion?: string;
 }
