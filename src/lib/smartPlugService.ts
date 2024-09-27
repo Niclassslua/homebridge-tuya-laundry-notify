@@ -4,11 +4,28 @@ import { table } from 'table';
 import TuyaOpenMQ from '../core/TuyaOpenMQ';  // Import TuyaOpenMQ
 
 export class SmartPlugService {
-  private tuyaMQ: TuyaOpenMQ;  // Declare the TuyaOpenMQ instance
+  constructor(private apiInstance: any, private log: Logger, private tuyaMQ: TuyaOpenMQ) {
+    // Use the TuyaOpenMQ instance that is passed in from the platform class
+  }
 
-  constructor(private apiInstance: any, private log: Logger) {
-    this.tuyaMQ = new TuyaOpenMQ(apiInstance, log);  // Initialize TuyaOpenMQ
-    this.tuyaMQ.start();  // Start the MQTT listener
+  // Method to fetch Smart Plugs
+  async getSmartPlugs() {
+    try {
+      const devicesResponse = await this.apiInstance.get('/v1.0/iot-01/associated-users/devices');
+      if (!devicesResponse.success) {
+        this.log.error(`Fetching smart plugs failed. code=${devicesResponse.code}, msg=${devicesResponse.msg}`);
+        return [];
+      }
+
+      return devicesResponse.result?.devices.filter(device => device.category === 'cz').map(device => ({
+        displayName: device.name,
+        UUID: device.id,
+        deviceId: device.id
+      }));
+    } catch (error) {
+      this.log.error(`Error fetching smart plugs: ${error.message}`);
+      return [];
+    }
   }
 
   // Method to track power consumption
@@ -23,7 +40,7 @@ export class SmartPlugService {
     connection.write('Tracking power consumption...\n');
 
     try {
-      // Use TuyaOpenMQ to listen for MQTT messages
+      // Use the shared TuyaOpenMQ instance to listen for MQTT messages
       this.tuyaMQ.addMessageListener(async (message: any) => {
         const currentDPS = message?.status?.find((dps: any) => dps.code === powerValueId)?.value / 10;
         if (currentDPS !== undefined) {
@@ -66,7 +83,7 @@ export class SmartPlugService {
       const activeValues: number[] = [];
       const inactiveMedian = 0;  // Assume no power consumption at the start
 
-      // Use TuyaOpenMQ for MQTT messages
+      // Use the shared TuyaOpenMQ for MQTT messages
       this.tuyaMQ.addMessageListener(async (message: any) => {
         const currentDPS = message?.status?.find((dps: any) => dps.code === powerValueId)?.value / 10;
         if (currentDPS !== undefined) {
@@ -87,5 +104,39 @@ export class SmartPlugService {
       this.log.error(`Calibration error: ${error.message}`);
       connection.write(`Calibration error: ${error.message}\n`);
     }
+  }
+
+  // Method to identify power value
+  async identifyPowerValue(deviceId: string, connection: net.Socket) {
+    const log = this.log;
+    const existingDPS: { [key: string]: string } = {};
+
+    log.info(`Starting identification for device: ${deviceId}`);
+
+    const response = await this.apiInstance.get(`/v1.0/devices/${deviceId}`);
+    if (!response.success) {
+      log.error(`Failed to retrieve device ${deviceId}: ${response.msg}`);
+      return;
+    }
+
+    log.info('Power on your appliance to observe the values.');
+    setInterval(async () => {
+      const statusResponse = await this.apiInstance.get(`/v1.0/devices/${deviceId}/status`);
+      if (!statusResponse.success) {
+        log.error(`Error retrieving status: ${statusResponse.msg}`);
+        return;
+      }
+
+      Object.assign(existingDPS, statusResponse.result);
+      const tableData: string[][] = [['Property ID', 'Value']];
+      for (const [key, value] of Object.entries(existingDPS)) {
+        const displayValue = typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value);
+        tableData.push([key, displayValue]);
+      }
+
+      connection.write(table(tableData));
+      connection.write('Make sure the plugged-in appliance is consuming power (operating).');
+      connection.write('\nOne of the values above will represent power consumption.\n');
+    }, 5000);
   }
 }

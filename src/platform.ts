@@ -3,7 +3,7 @@ import { NotifyConfig } from './interfaces/notifyConfig';
 import { IndependentPlatformPlugin } from 'homebridge/lib/api';
 import { PLATFORM_NAME, PLUGIN_NAME } from './settings';
 import TuyaOpenAPI from './core/TuyaOpenAPI';
-import TuyaOpenMQ from './core/TuyaOpenMQ';  // Import TuyaOpenMQ for MQTT handling
+import TuyaOpenMQ from './core/TuyaOpenMQ';
 import { LaundryDeviceTracker } from './lib/laundryDeviceTracker';
 import { MessageGateway } from './lib/messageGateway';
 import { MQTTHandler } from './lib/mqttHandler';
@@ -18,7 +18,7 @@ export class TuyaLaundryNotifyPlatform implements IndependentPlatformPlugin {
   private mqttHandler!: MQTTHandler;
   private ipcServer!: IPCServer;
   private smartPlugService!: SmartPlugService;
-  private tuyaMQ!: TuyaOpenMQ;  // Declare TuyaOpenMQ for MQTT
+  private tuyaMQ!: TuyaOpenMQ;
 
   constructor(
     public readonly log: Logger,
@@ -40,8 +40,8 @@ export class TuyaLaundryNotifyPlatform implements IndependentPlatformPlugin {
     // Start MQTT connection
     this.tuyaMQ.start();
 
-    // Initialize services
-    this.smartPlugService = new SmartPlugService(this.apiInstance, this.log);
+    // Initialize services with shared TuyaOpenMQ instance
+    this.smartPlugService = new SmartPlugService(this.apiInstance, this.log, this.tuyaMQ);
     this.ipcServer = new IPCServer(this.log, this.config, this.smartPlugService);
 
     const messageGateway = new MessageGateway(log, this.config, api);
@@ -80,8 +80,8 @@ export class TuyaLaundryNotifyPlatform implements IndependentPlatformPlugin {
 
     this.log.info('Login to Tuya Cloud successful.');
 
-    // Initialize MQTT for message handling
-    this.mqttHandler = new MQTTHandler(this.log, this.tuyaMQ);  // Use TuyaOpenMQ
+    // Initialize MQTT for message handling with the shared TuyaOpenMQ instance
+    this.mqttHandler = new MQTTHandler(this.log, this.tuyaMQ);
     this.mqttHandler.startListening();
 
     this.log.info('Connecting to Laundry Devices...');
