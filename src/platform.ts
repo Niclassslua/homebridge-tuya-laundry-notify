@@ -1,22 +1,21 @@
 import { API, Logger, PlatformAccessory, PlatformConfig } from 'homebridge';
-import { NotifyConfig } from './interfaces/notifyConfig';
+import { NotifyConfig, TuyaApiCredentials } from './interfaces/notifyConfig'; // Import new config interfaces
 import { IndependentPlatformPlugin } from 'homebridge/lib/api';
 import { PLATFORM_NAME, PLUGIN_NAME } from './settings';
-import TuyaOpenAPI from './core/TuyaOpenAPI';
-import TuyaOpenMQ from './core/TuyaOpenMQ';
 import { LaundryDeviceTracker } from './lib/laundryDeviceTracker';
 import { MessageGateway } from './lib/messageGateway';
 import { ConfigManager } from './lib/configManager';
 import { IPCServer } from './lib/ipcServer';
 import { SmartPlugService } from './lib/smartPlugService';
+import TuyAPI from 'tuyapi';
+import TuyaOpenAPI from './core/TuyaOpenAPI'; // Import TuyaOpenAPI for cloud interactions
 
 export class TuyaLaundryNotifyPlatform implements IndependentPlatformPlugin {
   public readonly accessories: PlatformAccessory[] = [];
   private readonly laundryDevices: LaundryDeviceTracker[] = [];
-  private apiInstance!: TuyaOpenAPI;
-  private tokenExpiryTime: number | null = null;
   private ipcServer!: IPCServer;
   private smartPlugService!: SmartPlugService;
+  private apiInstance: any; // To hold the instance of the Tuya API after authentication
 
   constructor(
     public readonly log: Logger,
@@ -27,88 +26,63 @@ export class TuyaLaundryNotifyPlatform implements IndependentPlatformPlugin {
 
     // Initialize ConfigManager to extract necessary configuration
     const configManager = new ConfigManager(this.config);
-    const { accessId, accessKey, endpoint, countryCode, username, password, appSchema } = configManager.getConfig();
-
-    // Tuya API initialization
-    this.apiInstance = new TuyaOpenAPI(endpoint, accessId, accessKey, this.log, 'en', false);
+    const { laundryDevices, tuyaApiCredentials } = configManager.getConfig();  // Fetch the devices and API credentials
 
     // Initialize laundry devices
     const messageGateway = new MessageGateway(log, this.config, api);
-    if (this.config.laundryDevices) {
-      for (const laundryDevice of this.config.laundryDevices) {
-        this.laundryDevices.push(new LaundryDeviceTracker(log, messageGateway, laundryDevice, api, this.apiInstance));
+    if (laundryDevices) {
+      for (const laundryDevice of laundryDevices) {
+        this.laundryDevices.push(new LaundryDeviceTracker(log, messageGateway, laundryDevice, api));
       }
     }
 
+    // Perform Tuya API authentication on Homebridge launch
     this.api.on('didFinishLaunching', async () => {
       this.log.info('Homebridge has started, beginning initialization.');
-      await this.connect();  // Start Tuya API login and MQTT handling
+
+      // Prüfe, ob Tuya API Credentials existieren
+      if (!tuyaApiCredentials) {
+        this.log.error('Tuya API credentials are missing. Authentication cannot proceed.');
+        return;
+      }
+
+      // Authenticate with the Tuya API
+      this.apiInstance = await this.authenticateTuya(tuyaApiCredentials);
+
+      if (this.apiInstance) {
+        this.log.info('Tuya API successfully authenticated.');
+        // Initialize SmartPlugService after authentication
+        this.smartPlugService = new SmartPlugService(this.apiInstance, this.log);
+      } else {
+        this.log.error('Failed to authenticate with Tuya API.');
+      }
+
       this.ipcServer.start();  // Start the IPC server
     });
   }
 
-  private async connect() {
-    this.log.info('Starting connection to Tuya Cloud...');
-    const { accessId, accessKey, countryCode, username, password, appSchema } = this.config;
+  // Method to handle Tuya API authentication
+  private async authenticateTuya(credentials: TuyaApiCredentials) {
+    const { accessId, accessKey, username, password, countryCode, endpoint, appSchema } = credentials;
 
-    // Tuya API Login
+    const apiInstance = new TuyaOpenAPI(endpoint, accessId, accessKey);  // Use endpoint from credentials
+
     try {
-      this.log.debug(`Attempting to log in with AccessId: ${accessId}, Username: ${username}, CountryCode: ${countryCode}`);
-      const res = await this.apiInstance.homeLogin(
-        Number(countryCode),
-        username ?? '',
-        password ?? '',
-        appSchema ?? 'tuyaSmart'
-      );
-
-      if (!res.success) {
-        this.log.error(`Login failed. code=${res.code}, msg=${res.msg}`);
-        setTimeout(() => this.connect(), 5000);  // Retry after 5 seconds
-        return;
-      }
-
-      this.log.info('Login to Tuya Cloud successful.');
-      this.tokenExpiryTime = Date.now() + (res.result.expire_time * 1000);  // Token expiration time
-
-      // MQTT connection setup
-      this.log.info('Starting MQTT connection for message handling...');
-      const tuyaMQ = new TuyaOpenMQ(this.apiInstance, this.log);
-      tuyaMQ.start();
-
-      // Initialize services
-      this.smartPlugService = new SmartPlugService(this.apiInstance, this.log, tuyaMQ);
-      this.ipcServer = new IPCServer(this.log, this.config, this.smartPlugService);
-
-      // Add message listeners for each laundry device
-      this.log.info('Connecting to Laundry Devices...');
-      for (const laundryDevice of this.laundryDevices) {
-        tuyaMQ.addMessageListener(laundryDevice.onMQTTMessage.bind(laundryDevice));
-        try {
-          const uuid = this.api.hap.uuid.generate(laundryDevice.config.name);
-          const cachedAccessory = this.accessories.find(accessory => accessory.UUID === uuid);
-          if (laundryDevice.config.exposeStateSwitch) {
-            if (!cachedAccessory) {
-              this.log.debug(`Registering new accessory for ${laundryDevice.config.name}`);
-              laundryDevice.accessory = new this.api.platformAccessory(laundryDevice.config.name, uuid);
-              laundryDevice.accessory.addService(this.api.hap.Service.Switch, laundryDevice.config.name);
-              this.accessories.push(laundryDevice.accessory);
-              this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [laundryDevice.accessory]);
-            } else {
-              this.log.debug(`Found cached accessory for ${laundryDevice.config.name}`);
-              laundryDevice.accessory = cachedAccessory;
-            }
-          }
-          await laundryDevice.init();
-          this.log.info(`Successfully connected to device: ${laundryDevice.config.name}`);
-        } catch (error) {
-          this.log.error(`Failed to connect to ${laundryDevice.config.name}: ${error.message}`);
-        }
+      const res = await apiInstance.homeLogin(Number(countryCode), username, password, appSchema);  // Use appSchema from credentials
+      if (res && res.success) {
+        this.log.info('Successfully authenticated with Tuya OpenAPI.');
+        return apiInstance;
+      } else {
+        this.log.error('Authentication failed:', res ? res.msg : 'No response from API');
+        return null;
       }
     } catch (error) {
-      this.log.error(`Error during Tuya Cloud login: ${error.message}`);
+      this.log.error('Error during Tuya API authentication:', error);
+      return null;
     }
   }
 
+  // Manage accessories (Homebridge specific logic)
   configureAccessory(accessory: PlatformAccessory): void {
     const existingDevice = this.laundryDevices.find(laundryDevice =>
       this.api.hap.uuid.generate(laundryDevice.config.name) === accessory.UUID

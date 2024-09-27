@@ -84,12 +84,12 @@ export default class TuyaOpenAPI {
     public tokenInfo = {access_token: '', refresh_token: '', uid: '', expire: 0};
 
     constructor(
-        public endpoint: Endpoints | string,
-        public accessId: string,
-        public accessKey: string,
-        public log: Logger = console,
-        public lang = 'en',
-        public debug = false,
+      public endpoint: Endpoints | string,
+      public accessId: string,
+      public accessKey: string,
+      public log: Logger = console,
+      public lang = 'en',
+      public debug = false,
     ) {
         this.log = new PrefixLogger(log, TuyaOpenAPI.name, debug);
     }
@@ -282,7 +282,7 @@ export default class TuyaOpenAPI {
             'devVersion': version,
         };
         this.log.debug('Request:\nmethod = %s\nendpoint = %s\npath = %s\nquery = %s\nheaders = %s\nbody = %s',
-            method, this.endpoint, path, JSON.stringify(params, null, 2), JSON.stringify(headers, null, 2), JSON.stringify(body, null, 2));
+          method, this.endpoint, path, JSON.stringify(params, null, 2), JSON.stringify(headers, null, 2), JSON.stringify(body, null, 2));
 
         if (params) {
             path += '?' + new URLSearchParams(params).toString();

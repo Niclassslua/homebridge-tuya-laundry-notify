@@ -5,7 +5,7 @@
 <span align="center">
 
 # 🧼📲 Homebridge Tuya Laundry Notify
-### A **Homebridge Plugin** that monitors laundry appliances by tracking power consumption using Tuya Smart Plugs, notifying users of start and stop cycles, and offering easy calibration for precise device activity detection.
+### A **Homebridge Plugin** that monitors laundry appliances by tracking power consumption using Tuya Smart Plugs and communicating with them over LAN, notifying users of start and stop cycles, and offering easy calibration for precise device activity detection.
 
 ![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)
 ![Last Commit](https://img.shields.io/github/last-commit/Niclassslua/homebridge-tuya-laundry-notify)

@@ -13,7 +13,7 @@ export class CommandHandler {
     input = input.trim();
     this.log.info(`Command received: "${input}"`);
 
-    // If awaiting specific input (device number, powerValueId, or wash duration)
+    // Wenn ein spezifischer Input (Gerätenummer, PowerValueId oder Waschdauer) erwartet wird
     if (this.selectedCommand && /^\d+$/.test(input) && this.selectedCommand !== 'awaitingWashDuration') {
       const index = parseInt(input, 10) - 1;
       if (index >= 0 && index < this.smartPlugsCache.length) {
@@ -34,7 +34,7 @@ export class CommandHandler {
       return;
     }
 
-    // Handle wash duration input
+    // Handling der Waschdauer
     if (this.selectedCommand === 'awaitingWashDuration') {
       const washDurationSeconds = parseInt(input, 10);
       if (isNaN(washDurationSeconds) || washDurationSeconds <= 0) {
@@ -46,7 +46,7 @@ export class CommandHandler {
       return;
     }
 
-    // Handle PowerValueID input
+    // Handling der PowerValueID
     if (this.selectedCommand === 'awaitingPowerValueId') {
       const powerValueId = input;
       if (this.selectedPlug) {
@@ -65,7 +65,8 @@ export class CommandHandler {
       case 'calibrate': {
         this.selectedCommand = input;
 
-        const smartPlugs = await this.smartPlugService.getSmartPlugs();
+        // *** Starte die Discovery, wenn ein Befehl wie "identify", "track" oder "calibrate" eingegeben wurde ***
+        const smartPlugs = await this.smartPlugService.discoverSmartPlugs();  // Starte Discovery hier
         if (smartPlugs.length === 0) {
           connection.write('No smart plugs found.\n');
           connection.end();
