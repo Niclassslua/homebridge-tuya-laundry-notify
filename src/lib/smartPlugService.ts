@@ -40,38 +40,69 @@ export class SmartPlugService {
     connection.write('Tracking power consumption...\n');
 
     try {
-      // Use the shared TuyaOpenMQ instance to listen for MQTT messages
-      this.tuyaMQ.addMessageListener(async (message: any) => {
-        const currentDPS = message?.status?.find((dps: any) => dps.code === powerValueId)?.value / 10;
-        if (currentDPS !== undefined) {
-          powerValues.push(currentDPS);
-          if (powerValues.length > maxPowerValues) {
-            powerValues.shift();
-          }
+      // Use the TuyaOpenMQ instance to listen for MQTT messages
+      this.tuyaMQ.addMessageListener(async (message: string) => {
+        this.log.debug(`Received MQTT message: ${message}`);
 
-          const averagePower = powerValues.reduce((sum, val) => sum + val, 0) / powerValues.length;
-          connection.write(`Current power: ${averagePower.toFixed(2)} Watt\n`);
+        if (this.isValidJson(message)) {
+          const parsedMessage = JSON.parse(message);
+          this.log.debug(`Parsed MQTT message: ${JSON.stringify(parsedMessage)}`);
 
-          // Dynamic thresholds and state changes
-          if (powerValues.length === maxPowerValues) {
-            startThreshold = averagePower + Math.max(...powerValues) * 0.2;
-            stopThreshold = averagePower * 0.8;
+          if (parsedMessage.status) {
+            this.log.debug(`Status field found in MQTT message`);
 
-            if (currentState === 'inactive' && currentDPS > startThreshold) {
-              currentState = 'active';
-              connection.write('Device is now active.\n');
+            const currentDPS = parsedMessage?.status?.find((dps: any) => dps.code === powerValueId)?.value / 10;
+
+            if (currentDPS !== undefined) {
+              this.log.debug(`Extracted power consumption value (DPS): ${currentDPS}`);
+
+              powerValues.push(currentDPS);
+              if (powerValues.length > maxPowerValues) {
+                powerValues.shift();  // Remove oldest values
+              }
+
+              const averagePower = powerValues.reduce((sum, val) => sum + val, 0) / powerValues.length;
+              connection.write(`Current power: ${averagePower.toFixed(2)} Watt\n`);
+
+              // Dynamic thresholds and state changes
+              if (powerValues.length === maxPowerValues) {
+                startThreshold = averagePower + Math.max(...powerValues) * 0.2;
+                stopThreshold = averagePower * 0.8;
+
+                this.log.debug(`Start threshold: ${startThreshold}, Stop threshold: ${stopThreshold}`);
+
+                if (currentState === 'inactive' && currentDPS > startThreshold) {
+                  currentState = 'active';
+                  connection.write('Device is now active.\n');
+                }
+
+                if (currentState === 'active' && currentDPS < stopThreshold) {
+                  currentState = 'inactive';
+                  connection.write('Device is now inactive.\n');
+                }
+              }
+            } else {
+              this.log.warn(`No valid power value found in the message.`);
             }
-
-            if (currentState === 'active' && currentDPS < stopThreshold) {
-              currentState = 'inactive';
-              connection.write('Device is now inactive.\n');
-            }
+          } else {
+            this.log.warn(`No status field found in the message.`);
           }
+        } else {
+          this.log.warn(`Received non-JSON MQTT message: ${message}`);
         }
       });
     } catch (error) {
       this.log.error(`Error tracking power consumption: ${error.message}`);
       connection.write(`Error: ${error.message}\n`);
+    }
+  }
+
+  isValidJson(message: string): boolean {
+    try {
+      JSON.parse(message);
+      return true;
+    } catch (error) {
+      return false;
     }
   }
 
