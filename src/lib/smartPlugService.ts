@@ -28,6 +28,50 @@ export class SmartPlugService {
     }
   }
 
+  // Method to calibrate power consumption
+  async calibratePowerConsumption(deviceId: string, powerValueId: string, connection: net.Socket, washDurationSeconds: number) {
+    try {
+      connection.write(`Calibration started for ${deviceId}. Duration: ${washDurationSeconds} seconds\n`);
+
+      const activeValues: number[] = [];
+      const inactiveMedian = 0;  // Assume no power consumption at the start
+
+      // Use the TuyaOpenMQ instance to listen for MQTT messages
+      this.tuyaMQ.addMessageListener((topic: string, protocol: TuyaMQTTProtocol, message: any) => {
+        if (protocol === TuyaMQTTProtocol.DEVICE_STATUS_UPDATE) {
+          const { devId, status } = message;
+          if (devId === deviceId) {
+            const currentDPS = status.find((property) => property.code === powerValueId)?.value / 10;
+            if (currentDPS !== undefined) {
+              activeValues.push(currentDPS);
+              this.log.debug(`Calibration data received. Current DPS: ${currentDPS}`);
+            }
+          }
+        }
+      });
+
+      // Wait for the washing duration to complete
+      setTimeout(() => {
+        if (activeValues.length === 0) {
+          connection.write(`No power values received for calibration.\n`);
+          return;
+        }
+
+        const activeMedian = activeValues.sort((a, b) => a - b)[Math.floor(activeValues.length / 2)];
+        const bufferFactor = 0.1;
+        const newStartThreshold = inactiveMedian + (activeMedian - inactiveMedian) * (1 - bufferFactor);
+        const newStopThreshold = inactiveMedian + (activeMedian - inactiveMedian) * bufferFactor;
+
+        connection.write(`Calibration completed. Start threshold: ${newStartThreshold.toFixed(2)} Watt, Stop threshold: ${newStopThreshold.toFixed(2)} Watt\n`);
+        this.log.info(`Calibration completed for device ${deviceId}: Start threshold: ${newStartThreshold}, Stop threshold: ${newStopThreshold}`);
+      }, washDurationSeconds * 1000);
+
+    } catch (error) {
+      this.log.error(`Calibration error for device ${deviceId}: ${error.message}`);
+      connection.write(`Calibration error: ${error.message}\n`);
+    }
+  }
+
   // Method to track power consumption
   async trackPowerConsumption(deviceId: string, powerValueId: string, connection: net.Socket) {
     let currentState: 'inactive' | 'starting' | 'active' | 'ending' = 'inactive';
@@ -48,45 +92,57 @@ export class SmartPlugService {
 
           // Ensure the message is for the correct device
           if (devId === deviceId) {
+
+            connection.write(`Raw MQTT message: ${status}`);
+
             const currentDPS = status.find((property) => property.code === powerValueId)?.value / 10;
 
-            if (currentDPS !== undefined) {
-              this.log.debug(`Extracted power consumption value (DPS): ${currentDPS}`);
-
-              powerValues.push(currentDPS);
-              if (powerValues.length > maxPowerValues) {
-                powerValues.shift();  // Remove oldest values
-              }
-
-              const averagePower = powerValues.reduce((sum, val) => sum + val, 0) / powerValues.length;
-              connection.write(`Current power: ${averagePower.toFixed(2)} Watt\n`);
-
-              // Dynamic thresholds and state changes
-              if (powerValues.length === maxPowerValues) {
-                startThreshold = averagePower + Math.max(...powerValues) * 0.2;
-                stopThreshold = averagePower * 0.8;
-
-                this.log.debug(`Start threshold: ${startThreshold}, Stop threshold: ${stopThreshold}`);
-
-                if (currentState === 'inactive' && currentDPS > startThreshold) {
-                  currentState = 'active';
-                  connection.write('Device is now active.\n');
-                }
-
-                if (currentState === 'active' && currentDPS < stopThreshold) {
-                  currentState = 'inactive';
-                  connection.write('Device is now inactive.\n');
-                }
-              }
-            } else {
-              this.log.warn(`No valid power value found in the message.`);
+            // Check if currentDPS is undefined or NaN
+            if (currentDPS === undefined || isNaN(currentDPS)) {
+              connection.write(`Invalid power value received: ${currentDPS}. Skipping this entry.\n`);
+              return;
             }
+
+            connection.write(`Raw power value (DPS): ${status.find((property) => property.code === powerValueId)?.value}`);
+            connection.write(`Received DPS: ${currentDPS.toFixed(2)} Watt\n`);
+
+            // Add the valid power value to the list
+            powerValues.push(currentDPS);
+            if (powerValues.length > maxPowerValues) {
+              powerValues.shift();  // Remove oldest values
+            }
+
+            // Calculate average power consumption
+            const averagePower = powerValues.reduce((sum, val) => sum + val, 0) / powerValues.length;
+
+            // Debugging: Log the calculated average power
+            connection.write(`Power values: ${powerValues}`);
+            connection.write(`Calculated average power: ${averagePower.toFixed(2)} Watt\n`);
+
+            // Dynamic thresholds and state changes
+            if (powerValues.length === maxPowerValues) {
+              startThreshold = averagePower + Math.max(...powerValues) * 0.2;
+              stopThreshold = averagePower * 0.8;
+
+              connection.write(`Start threshold: ${startThreshold}, Stop threshold: ${stopThreshold}`);
+
+              if (currentState === 'inactive' && currentDPS > startThreshold) {
+                currentState = 'active';
+                connection.write('Device is now active.\n');
+              }
+
+              if (currentState === 'active' && currentDPS < stopThreshold) {
+                currentState = 'inactive';
+                connection.write('Device is now inactive.\n');
+              }
+            }
+          } else {
+            this.log.warn(`Received data for a different device. Expected: ${deviceId}, Received: ${devId}`);
           }
         }
       });
     } catch (error) {
-      this.log.error(`Error tracking power consumption: ${error.message}`);
-      connection.write(`Error: ${error.message}\n`);
+      connection.write(`Error tracking power consumption: ${error.message}\n`);
     }
   }
 
