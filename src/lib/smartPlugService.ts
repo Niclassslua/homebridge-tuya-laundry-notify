@@ -1,7 +1,7 @@
 import { Logger } from 'homebridge';
 import net from 'net';
 import { table } from 'table';
-import TuyaOpenMQ from '../core/TuyaOpenMQ';  // Import TuyaOpenMQ
+import TuyaOpenMQ, { TuyaMQTTProtocol } from '../core/TuyaOpenMQ';  // Import TuyaOpenMQ
 
 export class SmartPlugService {
   constructor(private apiInstance: any, private log: Logger, private tuyaMQ: TuyaOpenMQ) {
@@ -41,17 +41,14 @@ export class SmartPlugService {
 
     try {
       // Use the TuyaOpenMQ instance to listen for MQTT messages
-      this.tuyaMQ.addMessageListener(async (message: string) => {
-        this.log.debug(`Received MQTT message: ${message}`);
+      this.tuyaMQ.addMessageListener((topic: string, protocol: TuyaMQTTProtocol, message: any) => {
+        // Filter only relevant messages
+        if (protocol === TuyaMQTTProtocol.DEVICE_STATUS_UPDATE) {
+          const { devId, status } = message;
 
-        if (this.isValidJson(message)) {
-          const parsedMessage = JSON.parse(message);
-          this.log.debug(`Parsed MQTT message: ${JSON.stringify(parsedMessage)}`);
-
-          if (parsedMessage.status) {
-            this.log.debug(`Status field found in MQTT message`);
-
-            const currentDPS = parsedMessage?.status?.find((dps: any) => dps.code === powerValueId)?.value / 10;
+          // Ensure the message is for the correct device
+          if (devId === deviceId) {
+            const currentDPS = status.find((property) => property.code === powerValueId)?.value / 10;
 
             if (currentDPS !== undefined) {
               this.log.debug(`Extracted power consumption value (DPS): ${currentDPS}`);
@@ -84,56 +81,12 @@ export class SmartPlugService {
             } else {
               this.log.warn(`No valid power value found in the message.`);
             }
-          } else {
-            this.log.warn(`No status field found in the message.`);
           }
-        } else {
-          this.log.warn(`Received non-JSON MQTT message: ${message}`);
         }
       });
     } catch (error) {
       this.log.error(`Error tracking power consumption: ${error.message}`);
       connection.write(`Error: ${error.message}\n`);
-    }
-  }
-
-  isValidJson(message: string): boolean {
-    try {
-      JSON.parse(message);
-      return true;
-    } catch (error) {
-      return false;
-    }
-  }
-
-  // Method to calibrate power consumption
-  async calibratePowerConsumption(deviceId: string, powerValueId: string, connection: net.Socket, washDurationSeconds: number) {
-    try {
-      connection.write(`Calibration started for ${deviceId}. Duration: ${washDurationSeconds} seconds\n`);
-
-      const activeValues: number[] = [];
-      const inactiveMedian = 0;  // Assume no power consumption at the start
-
-      // Use the shared TuyaOpenMQ for MQTT messages
-      this.tuyaMQ.addMessageListener(async (message: any) => {
-        const currentDPS = message?.status?.find((dps: any) => dps.code === powerValueId)?.value / 10;
-        if (currentDPS !== undefined) {
-          activeValues.push(currentDPS);
-        }
-      });
-
-      setTimeout(() => {
-        const activeMedian = activeValues.sort((a, b) => a - b)[Math.floor(activeValues.length / 2)];
-        const bufferFactor = 0.1;
-        const newStartThreshold = inactiveMedian + (activeMedian - inactiveMedian) * (1 - bufferFactor);
-        const newStopThreshold = inactiveMedian + (activeMedian - inactiveMedian) * bufferFactor;
-
-        connection.write(`Calibration completed. Start threshold: ${newStartThreshold.toFixed(2)} Watt, Stop threshold: ${newStopThreshold.toFixed(2)} Watt\n`);
-      }, washDurationSeconds * 1000);
-
-    } catch (error) {
-      this.log.error(`Calibration error: ${error.message}`);
-      connection.write(`Calibration error: ${error.message}\n`);
     }
   }
 

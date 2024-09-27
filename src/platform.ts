@@ -32,9 +32,6 @@ export class TuyaLaundryNotifyPlatform implements IndependentPlatformPlugin {
     // Tuya API initialization
     this.apiInstance = new TuyaOpenAPI(endpoint, accessId, accessKey, this.log, 'en', false);
 
-    // Initialize services
-    this.ipcServer = new IPCServer(this.log, this.config, this.smartPlugService);
-
     // Initialize laundry devices
     const messageGateway = new MessageGateway(log, this.config, api);
     if (this.config.laundryDevices) {
@@ -78,7 +75,9 @@ export class TuyaLaundryNotifyPlatform implements IndependentPlatformPlugin {
       const tuyaMQ = new TuyaOpenMQ(this.apiInstance, this.log);
       tuyaMQ.start();
 
+      // Initialize services
       this.smartPlugService = new SmartPlugService(this.apiInstance, this.log, tuyaMQ);
+      this.ipcServer = new IPCServer(this.log, this.config, this.smartPlugService);
 
       // Add message listeners for each laundry device
       this.log.info('Connecting to Laundry Devices...');

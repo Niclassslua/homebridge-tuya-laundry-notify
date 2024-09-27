@@ -36,7 +36,7 @@ export class IPCServer {
         this.log.info(`Command received via IPC: "${input}"`);
 
         // Übergibt den Befehl an den CommandHandler zur Verarbeitung
-        this.commandHandler.handleCommand(input, connection);  // Jetzt mit der connection
+        await this.commandHandler.handleCommand(input, connection);  // Jetzt mit der connection
       });
     });
 
