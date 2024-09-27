@@ -89,4 +89,17 @@ export class CommandHandler {
       }
     }
   }
+
+  // Display help information when connection is established
+  showHelp(connection: net.Socket) {
+    const helpMessage = `
+    Welcome to the Smart Plug Controller!
+    Available commands:
+    1. identify  - Identify the connected smart plugs
+    2. track     - Track power consumption of a smart plug
+    3. calibrate - Calibrate power consumption for a washing cycle
+    Type a command to begin.
+    `;
+    connection.write(helpMessage);
+  }
 }

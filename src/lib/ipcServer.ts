@@ -24,6 +24,8 @@ export class IPCServer {
 
     this.server = net.createServer((connection) => {
       this.log.info('Connection received via IPC server');
+      this.commandHandler.showHelp(connection);
+
       connection.write('> ');
 
       connection.setEncoding('utf8');

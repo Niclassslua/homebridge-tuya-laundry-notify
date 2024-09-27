@@ -37,6 +37,9 @@ export class TuyaLaundryNotifyPlatform implements IndependentPlatformPlugin {
     // Initialize TuyaOpenMQ for MQTT handling
     this.tuyaMQ = new TuyaOpenMQ(this.apiInstance, this.log);
 
+    // Start MQTT connection
+    this.tuyaMQ.start();
+
     // Initialize services
     this.smartPlugService = new SmartPlugService(this.apiInstance, this.log);
     this.ipcServer = new IPCServer(this.log, this.config, this.smartPlugService);
