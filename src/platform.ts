@@ -8,113 +8,41 @@ import TuyaOpenAPI from './core/TuyaOpenAPI';
 import fs from 'fs';
 import path from 'path';
 import { table } from 'table';
-import { DateTime } from 'luxon'; // Importiere Luxon für Zeitstempel
+import { DateTime } from 'luxon'; // Import Luxon for timestamps
 import net from 'net';
 import os from 'os';
 
-let Accessory: typeof PlatformAccessory;
-
 export class TuyaLaundryNotifyPlatform implements IndependentPlatformPlugin {
   public readonly typedConfig: PlatformConfig & NotifyConfig;
-  public readonly accessories: PlatformAccessory[] = [];
   private apiInstance!: TuyaOpenAPI;
-  private tokenInfo = {access_token: '', refresh_token: '', expire: 0};
+  private tokenInfo = { access_token: '', refresh_token: '', expire: 0 };
 
   constructor(
     public readonly log: Logger,
     public readonly config: PlatformConfig,
     public readonly api: API,
   ) {
-    this.log.info('TuyaLaundryNotifyPlatform initialisiert.');
+    this.log.info('TuyaLaundryNotifyPlatform initialized.');
     this.typedConfig = config as PlatformConfig & NotifyConfig;
-    Accessory = api.platformAccessory;
 
-    const {accessId, accessKey, endpoint, countryCode, username, password, appSchema} = this.typedConfig;
+    const { accessId, accessKey, endpoint, countryCode, username, password, appSchema } = this.typedConfig;
 
     const effectiveEndpoint = endpoint ?? 'https://openapi.tuyaeu.com';
 
     if (!accessId || !accessKey || !effectiveEndpoint) {
-      throw new Error('Access ID, Access Key und Endpoint müssen in der Konfiguration angegeben werden.');
+      throw new Error('Access ID, Access Key, and Endpoint must be specified in the configuration.');
     }
 
-    this.log.info(`Zugangsdaten: accessId=${accessId}, accessKey=${accessKey}, endpoint=${effectiveEndpoint}`);
+    this.log.info(`Credentials: accessId=${accessId}, accessKey=${accessKey}, endpoint=${effectiveEndpoint}`);
 
     this.api.on('didFinishLaunching', async () => {
-      this.log.info('Homebridge ist gestartet, beginne mit der Initialisierung.');
-      await this.initDevices();
-      this.startIPCServer();  // Starte IPC-Server
+      this.log.info('Homebridge has started, beginning initialization.');
+      this.startIPCServer();  // Start IPC server
     });
   }
 
-  configureAccessory(accessory: PlatformAccessory): void {
-    this.log.info(`Loading accessory from cache: ${accessory.displayName}`);
-    this.accessories.push(accessory);
-  }
-
-  async initDevices() {
-    const {accessId, accessKey, countryCode, username, password, appSchema, endpoint} = this.typedConfig;
-
-    const effectiveCountryCode = Number(countryCode ?? '49');
-    const effectiveUsername = username ?? '';
-    const effectivePassword = password ?? '';
-    const effectiveAppSchema = appSchema ?? 'tuyaSmart';
-
-    this.apiInstance = new TuyaOpenAPI(endpoint ?? 'https://openapi.tuyaeu.com', accessId ?? '', accessKey ?? '', this.log);
-    this.log.info('Log in to Tuya Cloud.');
-
-    const res = await this.apiInstance.homeLogin(effectiveCountryCode, effectiveUsername, effectivePassword, effectiveAppSchema);
-    if (res.success === false) {
-      this.log.error(`Login failed. code=${res.code}, msg=${res.msg}`);
-      return;
-    }
-
-    this.log.info('Fetching device list.');
-    const devicesResponse = await this.apiInstance.get('/v1.0/iot-01/associated-users/devices');
-
-    if (!devicesResponse.success) {
-      this.log.error(`Fetching device list failed. code=${devicesResponse.code}, msg=${devicesResponse.msg}`);
-      return;
-    }
-
-    const deviceList = devicesResponse.result?.devices;
-
-    if (!Array.isArray(deviceList)) {
-      this.log.error('deviceList is not an array');
-      return;
-    }
-
-    if (deviceList.length === 0) {
-      this.log.warn('No devices found.');
-      return;
-    }
-
-    const filePath = path.join(this.api.user.persistPath(), 'TuyaDeviceList.json');
-    this.log.info('Geräteliste gespeichert unter:', filePath);
-    await fs.promises.writeFile(filePath, JSON.stringify(deviceList, null, 2));
-
-    for (const device of deviceList) {
-      this.addAccessory(device);
-    }
-  }
-
-  addAccessory(device: any) {
-    const uuid = this.api.hap.uuid.generate(device.id);
-    const existingAccessory = this.accessories.find(accessory => accessory.UUID === uuid);
-
-    if (existingAccessory) {
-      this.log.info('Restoring existing accessory from cache:', existingAccessory.displayName);
-    } else {
-      this.log.info('Adding new accessory:', device.name);
-
-      const accessory = new this.api.platformAccessory(device.name, uuid);
-      accessory.context.deviceID = device.id;
-      accessory.context.deviceKey = device.local_key;
-      this.accessories.push(accessory);
-      this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
-    }
-  }
-
-  async calibratePowerConsumption(deviceId: string, powerValueId: string, connection?: net.Socket) {
+  // Modified calibration function with custom wash cycle duration
+  async calibratePowerConsumption(deviceId: string, powerValueId: string, connection?: net.Socket, washDurationSeconds = 600) {
     const writeToConnection = (message: string) => {
       if (connection) {
         connection.write(message + '\n');
@@ -123,46 +51,53 @@ export class TuyaLaundryNotifyPlatform implements IndependentPlatformPlugin {
       }
     };
 
-    writeToConnection('Kalibrierungsmodus gestartet.');
-    writeToConnection('Bitte starte jetzt das Gerät und lasse es für einige Zeit laufen. Drücke Enter, wenn das Gerät aktiv ist.');
+    writeToConnection(`Calibration mode started. Washing cycle duration is set to ${washDurationSeconds} seconds.`);
+    writeToConnection('Please start the appliance and let it run. Press Enter when the appliance is active.');
 
     connection?.once('data', async () => {
       const activeValues: number[] = [];
-      writeToConnection('Sammle Daten für den aktiven Zustand...');
-      for (let i = 0; i < 10; i++) {
+      writeToConnection('Collecting data for active state...');
+      const activeSampleTime = Date.now() + washDurationSeconds * 1000;
+
+      while (Date.now() < activeSampleTime) {
         const statusResponse = await this.apiInstance.get(`/v1.0/devices/${deviceId}/status`);
         const currentDPS = (statusResponse.result.find((dps: any) => dps.code === powerValueId)?.value) / 10;
         if (currentDPS !== undefined) {
           activeValues.push(currentDPS);
-          writeToConnection(`Aktiver Power-Wert: ${currentDPS} Watt`);
+          writeToConnection(`Active power value: ${currentDPS} Watt`);
         }
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        await new Promise(resolve => setTimeout(resolve, 2000)); // Sample every 2 seconds
       }
 
-      writeToConnection('Bitte schalte jetzt das Gerät aus. Drücke Enter, wenn das Gerät inaktiv ist.');
+      writeToConnection('Please turn off the appliance now. Press Enter when the appliance is inactive.');
 
       connection?.once('data', async () => {
         const inactiveValues: number[] = [];
-        writeToConnection('Sammle Daten für den inaktiven Zustand...');
-        for (let i = 0; i < 10; i++) {
+        writeToConnection('Collecting data for inactive state...');
+        const inactiveSampleTime = Date.now() + washDurationSeconds * 1000;
+
+        while (Date.now() < inactiveSampleTime) {
           const statusResponse = await this.apiInstance.get(`/v1.0/devices/${deviceId}/status`);
           const currentDPS = (statusResponse.result.find((dps: any) => dps.code === powerValueId)?.value) / 10;
           if (currentDPS !== undefined) {
             inactiveValues.push(currentDPS);
-            writeToConnection(`Inaktiver Power-Wert: ${currentDPS} Watt`);
+            writeToConnection(`Inactive power value: ${currentDPS} Watt`);
           }
-          await new Promise(resolve => setTimeout(resolve, 2000));
+          await new Promise(resolve => setTimeout(resolve, 2000)); // Sample every 2 seconds
         }
 
         const activeMedian = activeValues.sort((a, b) => a - b)[Math.floor(activeValues.length / 2)];
         const inactiveMedian = inactiveValues.sort((a, b) => a - b)[Math.floor(inactiveValues.length / 2)];
 
-        const newStartThreshold = (activeMedian + inactiveMedian) / 2;
-        const newStopThreshold = newStartThreshold;
+        // Apply a buffer to better separate the active and inactive thresholds
+        const bufferFactor = 0.1; // 10% buffer
 
-        writeToConnection(`Kalibrierung abgeschlossen.`);
-        writeToConnection(`Neuer Startschwellenwert: ${newStartThreshold.toFixed(2)} Watt`);
-        writeToConnection(`Neuer Stoppschwellenwert: ${newStopThreshold.toFixed(2)} Watt`);
+        const newStartThreshold = inactiveMedian + (activeMedian - inactiveMedian) * (1 - bufferFactor); // Closer to active state
+        const newStopThreshold = inactiveMedian + (activeMedian - inactiveMedian) * bufferFactor; // Closer to inactive state
+
+        writeToConnection('Calibration completed.');
+        writeToConnection(`New start threshold: ${newStartThreshold.toFixed(2)} Watt`);
+        writeToConnection(`New stop threshold: ${newStopThreshold.toFixed(2)} Watt`);
       });
     });
   }
@@ -203,13 +138,13 @@ export class TuyaLaundryNotifyPlatform implements IndependentPlatformPlugin {
       }
     };
 
-    writeToConnection(`Starte Überwachung des Energieverbrauchs für Gerät ID: ${deviceId}, PowerValueID: ${powerValueId}`);
+    writeToConnection(`Starting power consumption tracking for device ID: ${deviceId}, PowerValueID: ${powerValueId}`);
 
     setInterval(async () => {
       try {
         const statusResponse = await this.apiInstance.get(`/v1.0/devices/${deviceId}/status`);
         if (!statusResponse.success) {
-          writeToConnection(`Fehler beim Abrufen des Status: ${statusResponse.msg} (Code: ${statusResponse.code})`);
+          writeToConnection(`Error retrieving status: ${statusResponse.msg} (Code: ${statusResponse.code})`);
           return;
         }
 
@@ -217,7 +152,7 @@ export class TuyaLaundryNotifyPlatform implements IndependentPlatformPlugin {
         const currentDPS = (allDPS.find((dps: any) => dps.code === powerValueId)?.value) / 10;
 
         if (currentDPS !== undefined) {
-          writeToConnection(`Aktueller Power-Wert: ${currentDPS} Watt`);
+          writeToConnection(`Current power value: ${currentDPS} Watt`);
 
           powerValues.push(currentDPS);
           if (powerValues.length > maxPowerValues) {
@@ -228,14 +163,14 @@ export class TuyaLaundryNotifyPlatform implements IndependentPlatformPlugin {
           const variance = powerValues.reduce((sum, val) => sum + Math.pow(val - averagePower, 2), 0) / powerValues.length;
           const stdDev = Math.sqrt(variance);
 
-          writeToConnection(`Durchschnittlicher Verbrauch: ${averagePower.toFixed(2)} Watt, Standardabweichung: ${stdDev.toFixed(2)} Watt`);
+          writeToConnection(`Average consumption: ${averagePower.toFixed(2)} Watt, Standard deviation: ${stdDev.toFixed(2)} Watt`);
 
           if (powerValues.length === maxPowerValues) {
             startThreshold = averagePower + stdDev * 2;
             stopThreshold = averagePower + stdDev;
 
-            writeToConnection(`Dynamische Startschwelle: ${startThreshold.toFixed(2)} Watt`);
-            writeToConnection(`Dynamische Stoppschwelle: ${stopThreshold.toFixed(2)} Watt`);
+            writeToConnection(`Dynamic start threshold: ${startThreshold.toFixed(2)} Watt`);
+            writeToConnection(`Dynamic stop threshold: ${stopThreshold.toFixed(2)} Watt`);
           }
 
           switch (currentState) {
@@ -243,12 +178,12 @@ export class TuyaLaundryNotifyPlatform implements IndependentPlatformPlugin {
               if (startThreshold !== null && currentDPS > startThreshold) {
                 if (!stateChangeTime) {
                   stateChangeTime = DateTime.now();
-                  writeToConnection('Anstieg erkannt, Wartezeit beginnt...');
+                  writeToConnection('Increase detected, starting wait period...');
                 } else {
                   const duration = DateTime.now().diff(stateChangeTime, 'seconds').seconds;
                   if (duration >= stableTimeRequired) {
                     currentState = 'active';
-                    writeToConnection('Gerät ist jetzt aktiv.');
+                    writeToConnection('Device is now active.');
                     stateChangeTime = null;
                   }
                 }
@@ -261,12 +196,12 @@ export class TuyaLaundryNotifyPlatform implements IndependentPlatformPlugin {
               if (stopThreshold !== null && currentDPS < stopThreshold) {
                 if (!stateChangeTime) {
                   stateChangeTime = DateTime.now();
-                  writeToConnection('Abfall erkannt, Wartezeit beginnt...');
+                  writeToConnection('Decrease detected, starting wait period...');
                 } else {
                   const duration = DateTime.now().diff(stateChangeTime, 'seconds').seconds;
                   if (duration >= stableTimeRequired) {
                     currentState = 'inactive';
-                    writeToConnection('Gerät ist jetzt inaktiv.');
+                    writeToConnection('Device is now inactive.');
                     stateChangeTime = null;
                   }
                 }
@@ -276,10 +211,10 @@ export class TuyaLaundryNotifyPlatform implements IndependentPlatformPlugin {
               break;
           }
         } else {
-          writeToConnection('Konnte aktuellen Power-Wert nicht abrufen.');
+          writeToConnection('Unable to retrieve current power value.');
         }
       } catch (error) {
-        writeToConnection(`Fehler: ${error instanceof Error ? error.message : String(error)}`);
+        writeToConnection(`Error: ${error instanceof Error ? error.message : String(error)}`);
       }
     }, 5000);
   }
@@ -289,11 +224,11 @@ export class TuyaLaundryNotifyPlatform implements IndependentPlatformPlugin {
     const config = { id: deviceId, key: deviceKey, name: 'Smart Plug' };
     const existingDPS: { [key: string]: string } = {};
 
-    log.info(`Starte Identifizierung für Gerät: ${deviceId}`);
+    log.info(`Starting identification for device: ${deviceId}`);
 
     const response = await this.apiInstance.get(`/v1.0/devices/${deviceId}`);
     if (!response.success) {
-      log.error(`Konnte Gerät ${deviceId} nicht abrufen: ${response.msg}`);
+      log.error(`Failed to retrieve device ${deviceId}: ${response.msg}`);
       return;
     }
 
@@ -301,7 +236,7 @@ export class TuyaLaundryNotifyPlatform implements IndependentPlatformPlugin {
     setInterval(async () => {
       const statusResponse = await this.apiInstance.get(`/v1.0/devices/${deviceId}/status`);
       if (!statusResponse.success) {
-        log.error(`Fehler beim Abrufen des Status: ${statusResponse.msg}`);
+        log.error(`Error retrieving status: ${statusResponse.msg}`);
         return;
       }
 
@@ -320,86 +255,103 @@ export class TuyaLaundryNotifyPlatform implements IndependentPlatformPlugin {
 
   private startIPCServer() {
     const socketPath = path.join(os.tmpdir(), 'tuya-laundry.sock');
-    this.log.info(`Starte den IPC-Server auf ${socketPath}`);
+    this.log.info(`Starting IPC server at ${socketPath}`);
 
     if (fs.existsSync(socketPath)) {
       fs.unlinkSync(socketPath);
     }
 
     const server = net.createServer((connection) => {
-      this.log.info('Verbindung über den IPC-Server erhalten');
+      this.log.info('Connection received via IPC server');
       connection.write('> ');
 
       connection.setEncoding('utf8');
 
-      let selectedCommand = ''; // Variable für den aktuellen Befehl
-      let selectedPlug: any = null; // Das ausgewählte Gerät
-      let smartPlugsCache: any[] = []; // Cache für die Smart-Plugs
+      let selectedCommand = ''; // Variable for the current command
+      let selectedPlug: any = null; // The selected device
+      let smartPlugsCache: any[] = []; // Cache for smart plugs
 
       connection.on('data', async (data: string | Buffer) => {
         const input = data.toString().trim();
-        this.log.info(`Empfangener Befehl über IPC: "${input}"`);
 
-        // Kombinierter Ablauf mit list-smartplugs vor identify, track oder calibrate
+        // If the input is empty (i.e., Enter key was pressed), we skip any further command checks
+        if (input === '') {
+          this.log.info('Empty input received, proceeding to the next step if applicable.');
+          return; // Skip processing unknown command and let calibration continue
+        }
+
+        this.log.info(`Command received via IPC: "${input}"`);
+
+        // Combined flow with list-smartplugs before identify, track, or calibrate
         if (input === 'identify' || input === 'track' || input === 'calibrate') {
           selectedCommand = input;
 
-          // Liste zuerst die Smart-Plugs auf
+          // First, list the smart plugs
           const smartPlugs = await this.getSmartPlugs();
 
           if (smartPlugs.length === 0) {
-            connection.write('Keine Smart-Plugs gefunden.\n');
+            connection.write('No smart plugs found.\n');
             connection.end();
             return;
           }
 
-          smartPlugsCache = smartPlugs; // Smart-Plugs in Cache speichern
-          let response = 'Verfügbare Smart-Plugs:\n';
+          smartPlugsCache = smartPlugs; // Store smart plugs in cache
+          let response = 'Available smart plugs:\n';
           smartPlugs.forEach((plug, index) => {
             response += `${index + 1}: Name: ${plug.displayName}, UUID: ${plug.UUID}\n`;
           });
 
-          connection.write(response + 'Wähle die Nummer des Geräts: \n');
-        } else if (selectedCommand && /^\d+$/.test(input)) {
-          // Prüfe, ob die Eingabe eine Zahl ist und ein Smart-Plug ausgewählt wird
+          connection.write(response + 'Select the device number: \n');
+        } else if (selectedCommand && /^\d+$/.test(input) && selectedCommand !== 'awaitingWashDuration') {
+          // Check if the input is a number and a smart plug is selected
           const index = parseInt(input, 10) - 1;
           if (index >= 0 && index < smartPlugsCache.length) {
             selectedPlug = smartPlugsCache[index];
 
             if (selectedCommand === 'identify') {
               await this.identifyPowerValue(selectedPlug.deviceId, selectedPlug.deviceKey, connection);
-              selectedCommand = ''; // Reset des Befehls
+              selectedCommand = ''; // Reset command
             } else if (selectedCommand === 'track') {
-              connection.write('Bitte gib die PowerValueID ein: \n');
-              selectedCommand = 'awaitingPowerValueId'; // Setze den Zustand auf PowerValueID-Abfrage
+              connection.write('Please enter the PowerValueID: \n');
+              selectedCommand = 'awaitingPowerValueId'; // Set the state to PowerValueID query
             } else if (selectedCommand === 'calibrate') {
-              await this.calibratePowerConsumption(selectedPlug.deviceId, 'cur_power', connection);
-              selectedCommand = ''; // Reset des Befehls nach der Kalibrierung
+              // Now we correctly move to the 'awaitingWashDuration' state
+              connection.write('Please enter the washing cycle duration in seconds: \n');
+              selectedCommand = 'awaitingWashDuration'; // Awaiting wash duration input
             }
           } else {
-            connection.write('Ungültige Auswahl.\n');
+            connection.write('Invalid selection.\n');
+          }
+        } else if (selectedCommand === 'awaitingWashDuration') {
+          // Handle wash duration input and start calibration
+          const washDurationSeconds = parseInt(input, 10);
+          if (isNaN(washDurationSeconds) || washDurationSeconds <= 0) {
+            connection.write('Invalid duration. Please enter a valid number of seconds.\n');
+          } else {
+            await this.calibratePowerConsumption(selectedPlug.deviceId, 'cur_power', connection, washDurationSeconds);
+            selectedCommand = ''; // Reset command after calibration
           }
         } else if (selectedCommand === 'awaitingPowerValueId') {
-          // Verarbeite die PowerValueID nach der Auswahl des Geräts
+          // Process the PowerValueID after selecting the device
           const powerValueId = input;
           if (selectedPlug) {
             await this.trackPowerConsumption(selectedPlug.deviceId, selectedPlug.deviceKey, powerValueId, undefined, connection);
-            selectedCommand = ''; // Reset des Befehls
+            selectedCommand = ''; // Reset command
           } else {
-            connection.write('Kein gültiges Gerät ausgewählt.\n');
+            connection.write('No valid device selected.\n');
           }
         } else {
-          connection.write('Unbekannter Befehl\n');
+          connection.write('Unknown command\n');
         }
       });
     });
 
     server.listen(socketPath, () => {
-      this.log.info(`IPC-Server hört auf ${socketPath}`);
+      this.log.info(`IPC server listening at ${socketPath}`);
     });
 
     server.on('error', (err: Error) => {
-      this.log.error(`Fehler beim IPC-Server: ${err.message}`);
+      this.log.error(`Error with IPC server: ${err.message}`);
     });
   }
 }
