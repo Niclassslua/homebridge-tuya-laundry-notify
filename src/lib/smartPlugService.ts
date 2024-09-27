@@ -1,10 +1,11 @@
 import { Logger } from 'homebridge';
 import net from 'net';
+import { table } from 'table';  // Import table for formatting
 
 export class SmartPlugService {
   constructor(private apiInstance: any, private log: Logger) {}
 
-  // Methode zum Abrufen der Smart Plugs
+  // Method to fetch Smart Plugs
   async getSmartPlugs() {
     try {
       const devicesResponse = await this.apiInstance.get('/v1.0/iot-01/associated-users/devices');
@@ -16,8 +17,7 @@ export class SmartPlugService {
       return devicesResponse.result?.devices.filter(device => device.category === 'cz').map(device => ({
         displayName: device.name,
         UUID: device.id,
-        deviceId: device.id,
-        deviceKey: device.local_key
+        deviceId: device.id
       }));
     } catch (error) {
       this.log.error(`Error fetching smart plugs: ${error.message}`);
@@ -25,13 +25,12 @@ export class SmartPlugService {
     }
   }
 
-  // Methode zur Verfolgung des Stromverbrauchs
+  // Method to track power consumption
   async trackPowerConsumption(deviceId: string, powerValueId: string, connection: net.Socket) {
     let currentState: 'inactive' | 'starting' | 'active' | 'ending' = 'inactive';
     let startThreshold: number | null = null;
     let stopThreshold: number | null = null;
     const stableTimeRequired = 10;
-    const stateChangeTime: any = null;
     const powerValues: number[] = [];
     const maxPowerValues = 20;
 
@@ -49,7 +48,7 @@ export class SmartPlugService {
           const averagePower = powerValues.reduce((sum, val) => sum + val, 0) / powerValues.length;
           connection.write(`Current power: ${averagePower.toFixed(2)} Watt\n`);
 
-          // Dynamische Schwellenwerte und Statusänderungen
+          // Dynamic thresholds and state changes
           if (powerValues.length === maxPowerValues) {
             startThreshold = averagePower + Math.max(...powerValues) * 0.2;
             stopThreshold = averagePower * 0.8;
@@ -72,13 +71,13 @@ export class SmartPlugService {
     }
   }
 
-  // Methode zur Kalibrierung des Stromverbrauchs
-  async calibratePowerConsumption(deviceId: string, powerValueId: string, connection: net.Socket, washDurationSeconds: number = 600) {
+  // Method to calibrate power consumption
+  async calibratePowerConsumption(deviceId: string, powerValueId: string, connection: net.Socket, washDurationSeconds: number) {
     try {
       connection.write(`Calibration started for ${deviceId}. Duration: ${washDurationSeconds} seconds\n`);
 
       const activeValues: number[] = [];
-      const inactiveMedian = 0;  // Annahme: kein Stromverbrauch zu Beginn
+      const inactiveMedian = 0;  // Assume no power consumption at the start
 
       this.apiInstance.subscribeToMQTTMessages(async (message: any) => {
         const currentDPS = message?.status?.find((dps: any) => dps.code === powerValueId)?.value / 10;
@@ -100,5 +99,39 @@ export class SmartPlugService {
       this.log.error(`Calibration error: ${error.message}`);
       connection.write(`Calibration error: ${error.message}\n`);
     }
+  }
+
+  // Method to identify power value
+  async identifyPowerValue(deviceId: string, connection: net.Socket) {
+    const log = this.log;
+    const existingDPS: { [key: string]: string } = {};
+
+    log.info(`Starting identification for device: ${deviceId}`);
+
+    const response = await this.apiInstance.get(`/v1.0/devices/${deviceId}`);
+    if (!response.success) {
+      log.error(`Failed to retrieve device ${deviceId}: ${response.msg}`);
+      return;
+    }
+
+    log.info('Power on your appliance to observe the values.');
+    setInterval(async () => {
+      const statusResponse = await this.apiInstance.get(`/v1.0/devices/${deviceId}/status`);
+      if (!statusResponse.success) {
+        log.error(`Error retrieving status: ${statusResponse.msg}`);
+        return;
+      }
+
+      Object.assign(existingDPS, statusResponse.result);
+      const tableData: string[][] = [['Property ID', 'Value']];
+      for (const [key, value] of Object.entries(existingDPS)) {
+        const displayValue = typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value);
+        tableData.push([key, displayValue]);
+      }
+
+      connection.write(table(tableData));
+      connection.write('Make sure the plugged-in appliance is consuming power (operating).');
+      connection.write('\nOne of the values above will represent power consumption.\n');
+    }, 5000);
   }
 }

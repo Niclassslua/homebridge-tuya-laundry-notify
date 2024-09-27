@@ -1,54 +1,90 @@
 import { Logger } from 'homebridge';
 import net from 'net';
-import { SmartPlugService } from './smartPlugService'; // Importiere einen hypothetischen Service zur Interaktion mit Smart Plugs
+import { SmartPlugService } from './smartPlugService'; // Import SmartPlugService
 
 export class CommandHandler {
-  constructor(private log: Logger, private smartPlugService: SmartPlugService) {} // Injektion des SmartPlugService
+  private selectedCommand = '';
+  private selectedPlug: any = null;
+  private smartPlugsCache: any[] = [];
 
-  async handleCommand(command: string, connection: net.Socket) {
-    switch (command) {
-      case 'identify': {
-        this.log.info('Processing identify command...');
-        connection.write('Identifying device...\n');
+  constructor(private log: Logger, private smartPlugService: SmartPlugService) {}
+
+  async handleCommand(input: string, connection: net.Socket) {
+    input = input.trim();
+    this.log.info(`Command received: "${input}"`);
+
+    // If awaiting specific input (device number, powerValueId, or wash duration)
+    if (this.selectedCommand && /^\d+$/.test(input) && this.selectedCommand !== 'awaitingWashDuration') {
+      const index = parseInt(input, 10) - 1;
+      if (index >= 0 && index < this.smartPlugsCache.length) {
+        this.selectedPlug = this.smartPlugsCache[index];
+        if (this.selectedCommand === 'identify') {
+          await this.smartPlugService.identifyPowerValue(this.selectedPlug.deviceId, connection);
+          this.selectedCommand = '';
+        } else if (this.selectedCommand === 'track') {
+          connection.write('Please enter the PowerValueID: \n');
+          this.selectedCommand = 'awaitingPowerValueId';
+        } else if (this.selectedCommand === 'calibrate') {
+          connection.write('Please enter the washing cycle duration in seconds: \n');
+          this.selectedCommand = 'awaitingWashDuration';
+        }
+      } else {
+        connection.write('Invalid selection.\n');
+      }
+      return;
+    }
+
+    // Handle wash duration input
+    if (this.selectedCommand === 'awaitingWashDuration') {
+      const washDurationSeconds = parseInt(input, 10);
+      if (isNaN(washDurationSeconds) || washDurationSeconds <= 0) {
+        connection.write('Invalid duration. Please enter a valid number of seconds.\n');
+      } else {
+        await this.smartPlugService.calibratePowerConsumption(this.selectedPlug.deviceId, 'cur_power', connection, washDurationSeconds);
+        this.selectedCommand = '';
+      }
+      return;
+    }
+
+    // Handle PowerValueID input
+    if (this.selectedCommand === 'awaitingPowerValueId') {
+      const powerValueId = input;
+      if (this.selectedPlug) {
+        await this.smartPlugService.trackPowerConsumption(this.selectedPlug.deviceId, powerValueId, connection);
+        this.selectedCommand = '';
+      } else {
+        connection.write('No valid device selected.\n');
+      }
+      return;
+    }
+
+    // Main command logic
+    switch (input) {
+      case 'identify':
+      case 'track':
+      case 'calibrate': {
+        this.selectedCommand = input;
+
         const smartPlugs = await this.smartPlugService.getSmartPlugs();
         if (smartPlugs.length === 0) {
           connection.write('No smart plugs found.\n');
-        } else {
-          connection.write('Available smart plugs:\n');
-          smartPlugs.forEach((plug, index) => {
-            connection.write(`${index + 1}: Name: ${plug.displayName}, UUID: ${plug.UUID}\n`);
-          });
+          connection.end();
+          return;
         }
-        break;
-      }
 
-      case 'track': {
-        this.log.info('Processing track command...');
-        connection.write('Tracking power consumption...\n');
-        const trackingResult = await this.smartPlugService.trackPowerConsumption();
-        if (trackingResult.success) {
-          connection.write(`Power consumption tracked: ${trackingResult.data} Watt\n`);
-        } else {
-          connection.write(`Failed to track power consumption: ${trackingResult.error}\n`);
-        }
-        break;
-      }
+        this.smartPlugsCache = smartPlugs;
+        let response = 'Available smart plugs:\n';
+        smartPlugs.forEach((plug, index) => {
+          response += `${index + 1}: Name: ${plug.displayName}, UUID: ${plug.UUID}\n`;
+        });
 
-      case 'calibrate': {
-        this.log.info('Processing calibrate command...');
-        connection.write('Calibrating power consumption...\n');
-        const calibrationResult = await this.smartPlugService.calibratePowerConsumption();
-        if (calibrationResult.success) {
-          connection.write('Calibration completed successfully.\n');
-        } else {
-          connection.write(`Calibration failed: ${calibrationResult.error}\n`);
-        }
+        connection.write(response + 'Select the device number: \n');
         break;
       }
 
       default: {
-        this.log.warn(`Unknown command: ${command}`);
-        connection.write(`Unknown command: ${command}\n`);
+        this.log.warn(`Unknown command: ${input}`);
+        connection.write(`Unknown command: ${input}\n`);
         break;
       }
     }
