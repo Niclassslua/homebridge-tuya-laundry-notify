@@ -1,13 +1,50 @@
-import { Logger } from 'homebridge';
 import TuyAPI from 'tuyapi';
+import { Logger } from 'homebridge';
 import net from 'net';
 import dgram from 'dgram';
 import crypto from 'crypto';
 
 export class SmartPlugService {
   private devicesSeen = new Set<string>();
+  private cachedDevices: any[] = [];  // Cache für die zuvor entdeckten Geräte
 
   constructor(private apiInstance: any, private log: Logger) {}
+
+  async getLocalDPS(device: any, log: any): Promise<any> {
+    try {
+      const plug = new TuyAPI({
+        id: device.UUID,
+        key: device.localKey,
+        ip: device.ip,
+        version: device.version,  // Vergewissere dich, dass die Protokollversion korrekt ist, z.B. 3.3 oder 3.4
+      });
+
+      // Suche das Gerät im lokalen Netzwerk
+      await plug.find();  // Versuche, das Gerät im LAN zu finden
+
+      // Verbinde mit dem Gerät
+      await plug.connect();  // Stelle die Verbindung her
+      log.info(`Connected to device ${device.UUID}`);
+
+      // Status des Geräts abfragen, spezifisch für die DPS-Daten
+      const status = await plug.get({ dps: 1 });  // DPS 1 ist meist der Power-Wert, passe dies ggf. an
+      log.info(`Device status (DPS 1): ${JSON.stringify(status)}`);
+
+      // Trenne die Verbindung
+      await plug.disconnect();
+
+      // Prüfen, ob der Status korrekt ist
+      if (status !== undefined && status !== null) {
+        return status;  // Rückgabe des DPS-Status
+      } else {
+        throw new Error('DPS-Status ist null oder undefined.');
+      }
+
+    } catch (error) {
+      log.error(`Fehler beim Abrufen des Status für das Gerät ${device.UUID}: ${error.message}`);
+      throw new Error(`Failed to fetch DPS for device ${device.UUID}: ${error.message}`);
+    }
+  }
 
   // Methode zur Entdeckung von Geräten im lokalen Netzwerk
   async discoverLocalDevices(): Promise<any[]> {
@@ -22,13 +59,29 @@ export class SmartPlugService {
 
       if (allLocalDevices.length === 0) {
         this.log.warn('No devices found in the local network.');
+
+        if (this.cachedDevices.length > 0) {
+          this.log.info('Returning cached devices.');
+          return this.cachedDevices;  // Wenn keine neuen Geräte gefunden werden, gebe die gecachten Geräte zurück
+        }
+
         return [];
       }
 
       this.log.info(`Discovered ${allLocalDevices.length} local devices.`);
+
+      // Cache aktualisieren
+      this.cachedDevices = allLocalDevices;
+
       return allLocalDevices;
     } catch (error) {
       this.log.error(`Error discovering local devices: ${error.message}`);
+
+      if (this.cachedDevices.length > 0) {
+        this.log.info('Returning cached devices after error.');
+        return this.cachedDevices;  // Wenn ein Fehler auftritt, verwende den Cache
+      }
+
       return [];
     }
   }
