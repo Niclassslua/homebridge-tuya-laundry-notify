@@ -87,7 +87,6 @@ export class TuyaLaundryNotifyPlatform implements IndependentPlatformPlugin {
   }
 
   // Method to handle Tuya API authentication
-  // Method to handle Tuya API authentication
   private async authenticateTuya(credentials: TuyaApiCredentials) {
     const { accessId, accessKey, username, password, countryCode, endpoint, appSchema } = credentials;
 
@@ -105,19 +104,6 @@ export class TuyaLaundryNotifyPlatform implements IndependentPlatformPlugin {
     } catch (error) {
       this.log.error('Error during Tuya API authentication:', error);
       return null;
-    }
-  }
-
-  // Manage accessories (Homebridge specific logic)
-  configureAccessory(accessory: PlatformAccessory): void {
-    const existingDevice = this.laundryDevices.find(laundryDevice =>
-      this.api.hap.uuid.generate(laundryDevice.config.name || 'Unnamed Device') === accessory.UUID // Fallback für undefined name
-    );
-
-    if (!existingDevice || !existingDevice.config.exposeStateSwitch) {
-      this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
-    } else {
-      this.accessories.push(accessory);
     }
   }
 }
