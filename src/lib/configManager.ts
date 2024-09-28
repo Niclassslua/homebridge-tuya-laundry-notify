@@ -5,26 +5,19 @@ export class ConfigManager {
   constructor(private config: PlatformConfig & NotifyConfig) {}
 
   public getConfig() {
-    const { laundryDevices, tuyaApiCredentials } = this.config;
+    const { laundryDevices, accessId, accessKey, username, password, countryCode, appSchema, endpoint } = this.config;
 
     if (!laundryDevices || laundryDevices.length === 0) {
       throw new Error('At least one laundry device must be specified in the configuration.');
     }
 
-    // Prüfe, ob die Tuya-API-Zugangsdaten definiert sind
-    if (!tuyaApiCredentials) {
-      throw new Error('Tuya API credentials must be provided.');
+    if (!accessId || !accessKey || !username || !password || !countryCode || !appSchema || !endpoint) {
+      throw new Error('Tuya API credentials and necessary fields (accessId, accessKey, username, password, countryCode, appSchema, endpoint) must be provided.');
     }
 
-    // Validate Tuya API Credentials
-    const { accessId, accessKey, username, password, countryCode } = tuyaApiCredentials;
-    if (!accessId || !accessKey || !username || !password || !countryCode) {
-      throw new Error('Tuya API credentials (Access ID, Access Key, Username, Password, and Country Code) must be provided.');
-    }
-
-    // Validate each device's required fields (deviceId, localKey, ipAddress)
+    // Validate each device's required fields (id, key, ipAddress)
     laundryDevices.forEach((device) => {
-      const { id, key, ipAddress } = device; // Verwende id statt deviceId
+      const { id, key, ipAddress } = device;
       if (!id || !key || !ipAddress) {
         throw new Error(`Device ${device.name || id} must have an ID, Key, and IP Address.`);
       }
@@ -32,7 +25,15 @@ export class ConfigManager {
 
     return {
       laundryDevices,
-      tuyaApiCredentials,  // Return the API credentials along with the devices
+      tuyaApiCredentials: {
+        accessId,
+        accessKey,
+        username,
+        password,
+        countryCode,
+        appSchema,
+        endpoint,
+      },
     };
   }
 }

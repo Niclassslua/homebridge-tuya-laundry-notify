@@ -62,6 +62,7 @@ export class TuyaLaundryNotifyPlatform implements IndependentPlatformPlugin {
   }
 
   // Method to handle Tuya API authentication
+  // Method to handle Tuya API authentication
   private async authenticateTuya(credentials: TuyaApiCredentials) {
     const { accessId, accessKey, username, password, countryCode, endpoint, appSchema } = credentials;
 

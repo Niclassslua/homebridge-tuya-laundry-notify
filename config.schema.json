@@ -40,13 +40,17 @@
             "required": true,
             "description": "Country code for your account (e.g., '49' for Germany)"
           },
-          "protocolVersion": {
-            "title": "Tuya Protocol Version",
+          "appSchema": {
+            "title": "Tuya App Schema",
             "type": "string",
             "required": true,
-            "description": "Select the Tuya protocol version for your device",
-            "enum": ["3.1", "3.2", "3.3", "3.4"],
-            "default": "3.3"
+            "description": "The schema for your Tuya app (e.g., 'smartlife' or 'tuyaSmart')"
+          },
+          "endpoint": {
+            "title": "Tuya API Endpoint",
+            "type": "string",
+            "required": true,
+            "description": "The endpoint for your Tuya API (e.g., 'https://openapi.tuyaeu.com')"
           }
         }
       },
