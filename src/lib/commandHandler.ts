@@ -13,11 +13,22 @@ export class CommandHandler {
     input = input.trim();
     this.log.info(`Command received: "${input}"`);
 
-    // Wenn ein spezifischer Input (Gerätenummer, PowerValueId oder Waschdauer) erwartet wird
-    if (this.selectedCommand && /^\d+$/.test(input) && this.selectedCommand !== 'awaitingWashDuration') {
+    // Wenn ein spezifischer Input (Gerätenummer) erwartet wird
+    if (this.selectedCommand && /^\d+$/.test(input)) {
       const index = parseInt(input, 10) - 1;
       if (index >= 0 && index < this.smartPlugsCache.length) {
         this.selectedPlug = this.smartPlugsCache[index];
+
+        // Gebe Details des ausgewählten Geräts aus
+        connection.write(
+          `Selected device details:\n` +
+          `Name: ${this.selectedPlug.displayName}\n` +
+          `Tuya Device ID: ${this.selectedPlug.UUID}\n` +
+          `Local Key: ${this.selectedPlug.localKey || 'N/A'}\n` +
+          `IP Address: ${this.selectedPlug.ip}\n` +
+          `Protocol Version: ${this.selectedPlug.version}\n`
+        );
+
         if (this.selectedCommand === 'track') {
           connection.write('Please enter the PowerValueID: \n');
           this.selectedCommand = 'awaitingPowerValueId';

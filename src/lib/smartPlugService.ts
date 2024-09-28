@@ -15,8 +15,8 @@ export class SmartPlugService {
       this.log.info('Starting LAN discovery...');
 
       // Lokale Geräteentdeckung über verschiedene Ports starten
-      const localDevicesPort1 = await this.discoverDevices(6666);
       const localDevicesPort2 = await this.discoverDevices(6667);
+      const localDevicesPort1 = await this.discoverDevices(6666);
 
       const allLocalDevices = [...localDevicesPort1, ...localDevicesPort2];
 
@@ -45,15 +45,23 @@ export class SmartPlugService {
         return [];
       }
 
-      // Abgleichen der lokalen Geräte mit Cloud-Geräten
-      const matchedDevices = localDevices.map((localDevice) => {
-        const cloudDevice = cloudDevices.find((device) => device.deviceId === localDevice.deviceId);
-        if (cloudDevice) {
-          this.log.info(`Matched local device ${localDevice.deviceId} with cloud device ${cloudDevice.deviceId}.`);
-          return { ...localDevice, ...cloudDevice };
-        }
-        return localDevice; // Falls keine Übereinstimmung gefunden wurde, wird nur das lokale Gerät verwendet
-      });
+      // Abgleichen der lokalen Geräte mit Cloud-Geräten und filtert nicht gematchte Geräte aus
+      const matchedDevices = localDevices
+        .map((localDevice) => {
+          const cloudDevice = cloudDevices.find((device) => device.deviceId === localDevice.deviceId);
+          if (cloudDevice) {
+            this.log.info(`Matched local device ${localDevice.deviceId} with cloud device ${cloudDevice.deviceId}.`);
+            return { ...localDevice, ...cloudDevice };
+          }
+          return null; // Falls keine Übereinstimmung gefunden wurde
+        })
+        .filter((device) => device !== null);
+
+      if (matchedDevices.length === 0) {
+        this.log.info('No matching devices found.');
+      } else {
+        this.log.info(`Matched ${matchedDevices.length} devices with the Tuya Cloud.`);
+      }
 
       return matchedDevices;
     } catch (error) {
@@ -63,43 +71,58 @@ export class SmartPlugService {
   }
 
   // Lokale Geräte im Netzwerk erkennen
-  // Im SmartPlugService (Anpassung der discoverDevices Methode)
   private async discoverDevices(port: number): Promise<any[]> {
     return new Promise((resolve) => {
       const socket = dgram.createSocket('udp4');
       const discoveredDevices: any[] = [];
 
       socket.on('message', async (msg, rinfo) => {
-        // Check for duplicate messages
+        // Überprüfen auf doppelte Nachrichten
         if (this.devicesSeen.has(msg.toString('hex'))) return;
         this.devicesSeen.add(msg.toString('hex'));
 
-        const data = msg.slice(20, -8);  // Entfernt den Header und die Signatur
+        this.log.info('Raw UDP data:', msg.toString('hex'));
+        this.log.info('Received message length:', msg.length);
+
+        let data = msg.slice(20, -8); // Entfernt den Header und die Signatur
+        this.log.info('Received message length after trim:', data.length);
 
         try {
-          // Überprüfen, ob die Nachricht verschlüsselt ist
-          const jsonString = data.toString();
-          let jsonData = JSON.parse(jsonString);
+          // Versuche, die Nachricht zu entschlüsseln
+          data = Buffer.from(this.decryptUDP(data));
+          this.log.info('Decrypted data:', data.toString('hex'));
+        } catch (e) {
+          this.log.error('Error decrypting UDP message:', e.message);
+          return;
+        }
 
-          if (jsonData.encrypt === true) {
-            // Entschlüsseln, wenn die Nachricht verschlüsselt ist
-            this.log.info('Decrypting encrypted message...');
-            const decryptedData = this.decryptUDP(data);
-            jsonData = JSON.parse(decryptedData);
-          }
+        let dataString;
 
-          // Überprüfen, ob die entschlüsselte Nachricht gültig ist
-          if (this.isValidJSON(JSON.stringify(jsonData))) {
-            discoveredDevices.push({
-              deviceId: jsonData.gwId,
-              ip: rinfo.address,
-              version: jsonData.version,
-            });
-          } else {
-            this.log.error('Received invalid JSON data:', jsonString);
-          }
+        try {
+          dataString = data.toString('utf8').trim();
+          this.log.info('Received message length after toString:', dataString.length);
+
+          // Entferne nicht-druckbare Zeichen (z.B. Steuerzeichen)
+          dataString = dataString.replace(/[^\x20-\x7E]/g, '');
+          this.log.info('Cleaned dataString:', dataString);
+
+          // Versuch, den JSON-String zu parsen
+          const jsonData = JSON.parse(dataString);
+          discoveredDevices.push({
+            deviceId: jsonData.gwId,
+            ip: rinfo.address,
+            version: jsonData.version,
+          });
         } catch (err) {
-          this.log.error('Error processing device data:', err.message);
+          this.log.error('Error parsing device data:', err.message);
+
+          // Debugging: zeige das problematische Zeichen
+          const position = err.message.match(/at position (\d+)/);
+          if (position) {
+            const pos = parseInt(position[1], 10);
+            const faultyChar = dataString.charAt(pos);
+            this.log.error(`Problematisches Zeichen bei Position ${pos}: "${faultyChar}" (Unicode: ${faultyChar.charCodeAt(0)})`);
+          }
         }
       });
 
@@ -108,18 +131,9 @@ export class SmartPlugService {
         setTimeout(() => {
           socket.close();
           resolve(discoveredDevices);
-        }, 5000);  // Warten für 5 Sekunden auf Broadcasts, dann beenden
+        }, 5000); // Warten für 5 Sekunden auf Broadcasts, dann beenden
       });
     });
-  }
-
-  private isValidJSON(data: string): boolean {
-    try {
-      JSON.parse(data);
-      return true;
-    } catch (e) {
-      return false;
-    }
   }
 
   // Funktion zum Abrufen von Geräten aus der Tuya Cloud API
