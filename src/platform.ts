@@ -7,7 +7,6 @@ import { MessageGateway } from './lib/messageGateway';
 import { ConfigManager } from './lib/configManager';
 import { IPCServer } from './lib/ipcServer';
 import { SmartPlugService } from './lib/smartPlugService';
-import TuyAPI from 'tuyapi';
 import TuyaOpenAPI from './core/TuyaOpenAPI'; // Import TuyaOpenAPI for cloud interactions
 
 export class TuyaLaundryNotifyPlatform implements IndependentPlatformPlugin {
@@ -26,29 +25,29 @@ export class TuyaLaundryNotifyPlatform implements IndependentPlatformPlugin {
 
     // Initialize ConfigManager to extract necessary configuration
     const configManager = new ConfigManager(this.config);
-    this.log.debug('Configuration Manager initialized. Fetching configuration...');
+    this.log.info('Configuration Manager initialized. Fetching configuration...');
 
     const { laundryDevices, tuyaApiCredentials } = configManager.getConfig();  // Fetch the devices and API credentials
 
     // Debug-Prints für Laundry Devices
     if (laundryDevices && laundryDevices.length > 0) {
-      this.log.debug(`Laundry Devices Found: ${laundryDevices.length}`);
+      this.log.info(`Laundry Devices Found: ${laundryDevices.length}`);
       laundryDevices.forEach((device, index) => {
-        this.log.debug(`Device ${index + 1}: Name=${device.name}, ID=${device.id}, IP=${device.ipAddress}`);
+        this.log.info(`Device ${index + 1}: Name=${device.name}, ID=${device.id}, IP=${device.ipAddress}`);
       });
     } else {
-      this.log.debug('No Laundry Devices found.');
+      this.log.info('No Laundry Devices found.');
     }
 
     // Debug-Prints für Tuya API Credentials
     if (tuyaApiCredentials) {
-      this.log.debug(`Tuya API Credentials:`);
-      this.log.debug(`Access ID: ${tuyaApiCredentials.accessId}`);
-      this.log.debug(`Access Key: ${tuyaApiCredentials.accessKey}`);
-      this.log.debug(`Username: ${tuyaApiCredentials.username}`);
-      this.log.debug(`Country Code: ${tuyaApiCredentials.countryCode}`);
-      this.log.debug(`App Schema: ${tuyaApiCredentials.appSchema}`);
-      this.log.debug(`Endpoint: ${tuyaApiCredentials.endpoint}`);
+      this.log.info(`Tuya API Credentials:`);
+      this.log.info(`Access ID: ${tuyaApiCredentials.accessId}`);
+      this.log.info(`Access Key: ${tuyaApiCredentials.accessKey}`);
+      this.log.info(`Username: ${tuyaApiCredentials.username}`);
+      this.log.info(`Country Code: ${tuyaApiCredentials.countryCode}`);
+      this.log.info(`App Schema: ${tuyaApiCredentials.appSchema}`);
+      this.log.info(`Endpoint: ${tuyaApiCredentials.endpoint}`);
     } else {
       this.log.error('No Tuya API credentials found in configuration.');
     }
@@ -82,7 +81,12 @@ export class TuyaLaundryNotifyPlatform implements IndependentPlatformPlugin {
         this.log.error('Failed to authenticate with Tuya API.');
       }
 
-      this.ipcServer.start();  // Start the IPC server
+      // Sicherstellen, dass IPCServer initialisiert wurde
+      if (this.ipcServer) {
+        this.ipcServer.start();  // Start the IPC server
+      } else {
+        this.log.error('IPCServer is not initialized.');
+      }
     });
   }
 
