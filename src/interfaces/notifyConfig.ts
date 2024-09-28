@@ -22,17 +22,17 @@ export interface PushedConfig {
 }
 
 export interface LaundryDeviceConfig {
-    id: string;
-    name?: string;
-    key: string;
-    ipAddress: string;
-    powerValueId: string;
-    startValue: number;
-    startDuration: number;
-    endValue: number;
-    endDuration: number;
-    startMessage?: string;
-    endMessage?: string;
-    exposeStateSwitch?: boolean;
-    protocolVersion?: string;
+    id: string;                  // Tuya Device ID
+    name?: string;               // Optional device name
+    key: string;                 // Tuya Device Key for local communication
+    ipAddress: string;           // Device's local IP address
+    powerValueId: string;        // DPS code for power consumption
+    startValue: number;          // Power value to detect when the device starts
+    startDuration: number;       // Time required to consider the device started
+    endValue: number;            // Power value to detect when the device has ended
+    endDuration: number;         // Time required to consider the device ended
+    startMessage?: string;       // Message sent when the cycle starts
+    endMessage?: string;         // Message sent when the cycle ends
+    exposeStateSwitch?: boolean; // Expose switch for automation
+    protocolVersion?: string;    // Optional protocol version
 }

@@ -19,6 +19,8 @@ export class LaundryDeviceTracker {
     public config: LaundryDeviceConfig,
     public api: API,
   ) {
+    const deviceName = this.config.name || this.config.id;  // Fallback auf ID, falls kein Name vorhanden ist
+
     // Initialize TuyAPI device for local LAN control
     this.tuyapiDevice = new TuyAPI({
       id: this.config.id,
@@ -29,12 +31,14 @@ export class LaundryDeviceTracker {
   }
 
   public async init() {
+    const deviceName = this.config.name || this.config.id;  // Fallback auf ID, falls kein Name vorhanden ist
+
     if (this.config.startValue < this.config.endValue) {
       throw new Error('startValue cannot be smaller than endValue.');
     }
 
     if (!this.config.id || !this.config.key || !this.config.ipAddress) {
-      this.log.warn(`Device ${this.config.name} is missing required configuration (ID, Key, or IP). Initialization skipped.`);
+      this.log.warn(`Device ${deviceName} is missing required configuration (ID, Key, or IP). Initialization skipped.`);
       return;
     }
 
@@ -42,28 +46,29 @@ export class LaundryDeviceTracker {
       // Find and connect to the device on the local network
       await this.tuyapiDevice.find();
       await this.tuyapiDevice.connect();
-      this.log.info(`Connected to ${this.config.name} over LAN.`);
+      this.log.info(`Connected to ${deviceName} over LAN.`);
 
       // Start power monitoring
       await this.refresh();
     } catch (error) {
-      this.log.error(`Error initializing device ${this.config.name}: ${error.message}`);
+      this.log.error(`Error initializing device ${deviceName}: ${error.message}`);
     }
   }
 
   // Poll the device for updates every second
   private async refresh() {
+    const deviceName = this.config.name || this.config.id;  // Fallback auf ID, falls kein Name vorhanden ist
     try {
       // Fetch the current power status
       const powerValue = await this.tuyapiDevice.get({ dps: this.config.powerValueId || '18' });  // Assuming DPS '18' for power value
-      this.log.debug(`${this.config.name} current power: ${powerValue}`);
+      this.log.debug(`${deviceName} current power: ${powerValue}`);
 
       this.incomingData(powerValue);
 
       if (!this.isActive && this.startDetected && this.startDetectedTime) {
         const secondsDiff = DateTime.now().diff(this.startDetectedTime, 'seconds').seconds;
         if (secondsDiff > this.config.startDuration) {
-          this.log.info(`${this.config.name} started the job!`);
+          this.log.info(`${deviceName} started the job!`);
           if (this.config.startMessage) {
             await this.messageGateway.send(this.config.startMessage);
           }
@@ -75,7 +80,7 @@ export class LaundryDeviceTracker {
       if (this.isActive && this.endDetected && this.endDetectedTime) {
         const secondsDiff = DateTime.now().diff(this.endDetectedTime, 'seconds').seconds;
         if (secondsDiff > this.config.endDuration) {
-          this.log.info(`${this.config.name} finished the job!`);
+          this.log.info(`${deviceName} finished the job!`);
           if (this.config.endMessage) {
             await this.messageGateway.send(this.config.endMessage);
           }
@@ -84,7 +89,7 @@ export class LaundryDeviceTracker {
         }
       }
     } catch (error) {
-      this.log.error(`Error refreshing device ${this.config.name}: ${error.message}`);
+      this.log.error(`Error refreshing device ${deviceName}: ${error.message}`);
     }
 
     // Poll again after 1 second
@@ -93,11 +98,12 @@ export class LaundryDeviceTracker {
 
   // Handle incoming data (power consumption)
   private incomingData(value: number) {
+    const deviceName = this.config.name || this.config.id;  // Fallback auf ID, falls kein Name vorhanden ist
     if (value > this.config.startValue) {
       if (!this.isActive && !this.startDetected) {
         this.startDetected = true;
         this.startDetectedTime = DateTime.now();
-        this.log.debug(`Detected start value, waiting for ${this.config.startDuration} seconds...`);
+        this.log.debug(`Detected start value for ${deviceName}, waiting for ${this.config.startDuration} seconds...`);
       }
     } else {
       this.startDetected = false;
@@ -108,7 +114,7 @@ export class LaundryDeviceTracker {
       if (this.isActive && !this.endDetected) {
         this.endDetected = true;
         this.endDetectedTime = DateTime.now();
-        this.log.debug(`Detected end value, waiting for ${this.config.endDuration} seconds...`);
+        this.log.debug(`Detected end value for ${deviceName}, waiting for ${this.config.endDuration} seconds...`);
       }
     } else {
       this.endDetected = false;
