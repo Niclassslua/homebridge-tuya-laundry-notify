@@ -18,10 +18,7 @@ export class CommandHandler {
       const index = parseInt(input, 10) - 1;
       if (index >= 0 && index < this.smartPlugsCache.length) {
         this.selectedPlug = this.smartPlugsCache[index];
-        if (this.selectedCommand === 'discover') {
-          await this.smartPlugService.identifyPowerValue(this.selectedPlug.deviceId, connection);
-          this.selectedCommand = '';
-        } else if (this.selectedCommand === 'track') {
+        if (this.selectedCommand === 'track') {
           connection.write('Please enter the PowerValueID: \n');
           this.selectedCommand = 'awaitingPowerValueId';
         } else if (this.selectedCommand === 'calibrate') {
@@ -60,22 +57,52 @@ export class CommandHandler {
 
     // Main command logic
     switch (input) {
-      case 'discover':
+      case 'discover': {
+        this.selectedCommand = input;
+
+        // Starte die LAN Discovery
+        connection.write('Starting LAN discovery...\n');
+        const localDevices = await this.smartPlugService.discoverLocalDevices();
+
+        if (localDevices.length === 0) {
+          connection.write('No LAN devices found.\n');
+          this.selectedCommand = '';
+          return;
+        }
+
+        connection.write(`Found ${localDevices.length} local devices. Now fetching cloud devices for comparison...\n`);
+
+        // Abgleich mit Cloud-Geräten
+        const matchedDevices = await this.smartPlugService.matchLocalWithCloudDevices(localDevices);
+
+        if (matchedDevices.length === 0) {
+          connection.write('No matching devices found in the cloud.\n');
+          this.selectedCommand = '';
+          return;
+        }
+
+        this.smartPlugsCache = matchedDevices;
+        let response = 'Matched smart plugs:\n';
+        matchedDevices.forEach((plug, index) => {
+          response += `${index + 1}: Name: ${plug.displayName}, UUID: ${plug.UUID}, IP: ${plug.ip}\n`;
+        });
+
+        connection.write(response + 'Select the device number: \n');
+        break;
+      }
+
       case 'track':
       case 'calibrate': {
         this.selectedCommand = input;
 
-        // *** Starte die Discovery, wenn ein Befehl wie "discover", "track" oder "calibrate" eingegeben wurde ***
-        const smartPlugs = await this.smartPlugService.discoverSmartPlugs();  // Starte Discovery hier
-        if (smartPlugs.length === 0) {
-          connection.write('No smart plugs found.\n');
-          connection.end();
+        if (this.smartPlugsCache.length === 0) {
+          connection.write('No devices found. Please run "discover" first.\n');
+          this.selectedCommand = '';
           return;
         }
 
-        this.smartPlugsCache = smartPlugs;
         let response = 'Available smart plugs:\n';
-        smartPlugs.forEach((plug, index) => {
+        this.smartPlugsCache.forEach((plug, index) => {
           response += `${index + 1}: Name: ${plug.displayName}, UUID: ${plug.UUID}\n`;
         });
 

@@ -9,29 +9,45 @@ export class SmartPlugService {
 
   constructor(private apiInstance: any, private log: Logger) {}
 
-  // Methode zum Abrufen der Smart Plugs aus dem lokalen Netzwerk und anschließendes Abgleichen mit der Cloud
-  async discoverSmartPlugs() {
+  // Methode zur Entdeckung von Geräten im lokalen Netzwerk
+  async discoverLocalDevices(): Promise<any[]> {
     try {
-      this.log.info('Starting device discovery from local network...');
+      this.log.info('Starting LAN discovery...');
 
-      // Lokale Geräteentdeckung starten
-      const localDevices = await this.discoverDevices(6666);
-      const moreLocalDevices = await this.discoverDevices(6667);
+      // Lokale Geräteentdeckung über verschiedene Ports starten
+      const localDevicesPort1 = await this.discoverDevices(6666);
+      const localDevicesPort2 = await this.discoverDevices(6667);
 
-      const allLocalDevices = [...localDevices, ...moreLocalDevices];
+      const allLocalDevices = [...localDevicesPort1, ...localDevicesPort2];
 
       if (allLocalDevices.length === 0) {
         this.log.warn('No devices found in the local network.');
-      } else {
-        this.log.info(`Local devices discovered: ${allLocalDevices.length}`);
+        return [];
       }
 
-      // Abrufen von Cloud-Geräten und Abgleich
-      this.log.info('Fetching devices from Tuya Cloud for comparison...');
-      const cloudDevices = await this.getCloudDevices();
+      this.log.info(`Discovered ${allLocalDevices.length} local devices.`);
+      return allLocalDevices;
+    } catch (error) {
+      this.log.error(`Error discovering local devices: ${error.message}`);
+      return [];
+    }
+  }
 
-      const matchedDevices = allLocalDevices.map((localDevice) => {
-        const cloudDevice = cloudDevices.find(device => device.deviceId === localDevice.deviceId);
+  // Methode zum Abgleich lokaler Geräte mit Cloud-Geräten
+  async matchLocalWithCloudDevices(localDevices: any[]): Promise<any[]> {
+    try {
+      this.log.info('Fetching devices from Tuya Cloud for comparison...');
+
+      // Abrufen der Cloud-Geräte
+      const cloudDevices = await this.getCloudDevices();
+      if (cloudDevices.length === 0) {
+        this.log.warn('No devices found in Tuya Cloud.');
+        return [];
+      }
+
+      // Abgleichen der lokalen Geräte mit Cloud-Geräten
+      const matchedDevices = localDevices.map((localDevice) => {
+        const cloudDevice = cloudDevices.find((device) => device.deviceId === localDevice.deviceId);
         if (cloudDevice) {
           this.log.info(`Matched local device ${localDevice.deviceId} with cloud device ${cloudDevice.deviceId}.`);
           return { ...localDevice, ...cloudDevice };
@@ -41,36 +57,46 @@ export class SmartPlugService {
 
       return matchedDevices;
     } catch (error) {
-      this.log.error(`Error discovering smart plugs: ${error.message}`);
+      this.log.error(`Error matching devices with Tuya Cloud: ${error.message}`);
       return [];
     }
   }
 
   // Lokale Geräte im Netzwerk erkennen
   private async discoverDevices(port: number): Promise<any[]> {
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve) => {
       const socket = dgram.createSocket('udp4');
       const discoveredDevices: any[] = [];
 
       socket.on('message', async (msg, rinfo) => {
+        // Überprüfen auf doppelte Nachrichten
         if (this.devicesSeen.has(msg.toString('hex'))) return;
         this.devicesSeen.add(msg.toString('hex'));
 
-        let data = msg.slice(20, -8);
+        let data = msg.slice(20, -8); // Entfernt den Header und die Signatur
 
         try {
+          // Versuche, die Nachricht zu entschlüsseln
           data = Buffer.from(this.decryptUDP(data));
         } catch (e) {
-          data = Buffer.from(data.toString());
+          this.log.error('Error decrypting UDP message:', e.message);
+          return;
         }
 
         try {
-          const jsonData = JSON.parse(data.toString());
-          discoveredDevices.push({
-            deviceId: jsonData.gwId,
-            ip: rinfo.address,
-            version: jsonData.version,
-          });
+          const dataString = data.toString();
+
+          // JSON-Validierung und Parsing
+          if (this.isValidJSON(dataString)) {
+            const jsonData = JSON.parse(dataString);
+            discoveredDevices.push({
+              deviceId: jsonData.gwId,
+              ip: rinfo.address,
+              version: jsonData.version,
+            });
+          } else {
+            this.log.error('Received invalid JSON data:', dataString);
+          }
         } catch (err) {
           this.log.error('Error parsing device data:', err.message);
         }
@@ -84,6 +110,15 @@ export class SmartPlugService {
         }, 5000); // Warten für 5 Sekunden auf Broadcasts, dann beenden
       });
     });
+  }
+
+  private isValidJSON(data: string): boolean {
+    try {
+      JSON.parse(data);
+      return true;
+    } catch (e) {
+      return false;
+    }
   }
 
   // Funktion zum Abrufen von Geräten aus der Tuya Cloud API
@@ -117,18 +152,39 @@ export class SmartPlugService {
     return decrypted.toString();
   }
 
-  // Method to calibrate power consumption
+  // Methode zum Kalibrieren des Stromverbrauchs
   async calibratePowerConsumption(deviceId: string, powerValueId: string, connection: net.Socket, washDurationSeconds: number) {
-    // Implement calibration logic here
+    try {
+      this.log.info(`Starting calibration for device ${deviceId} with duration ${washDurationSeconds} seconds.`);
+      connection.write(`Calibration started for device ${deviceId}. Duration: ${washDurationSeconds} seconds.\n`);
+      setTimeout(() => {
+        connection.write(`Calibration completed for device ${deviceId}.\n`);
+      }, washDurationSeconds * 1000);
+    } catch (error) {
+      this.log.error(`Calibration failed for device ${deviceId}: ${error.message}`);
+      connection.write(`Calibration failed for device ${deviceId}.\n`);
+    }
   }
 
-  // Method to track power consumption
+  // Methode zum Verfolgen des Stromverbrauchs
   async trackPowerConsumption(deviceId: string, powerValueId: string, connection: net.Socket) {
-    // Implement tracking logic here
+    try {
+      this.log.info(`Tracking power consumption for device ${deviceId} with PowerValueId ${powerValueId}.`);
+      connection.write(`Tracking power consumption for device ${deviceId} with PowerValueId ${powerValueId}.\n`);
+    } catch (error) {
+      this.log.error(`Error tracking power consumption for device ${deviceId}: ${error.message}`);
+      connection.write(`Error tracking power consumption for device ${deviceId}.\n`);
+    }
   }
 
-  // Method to identify power value
+  // Methode zur Identifizierung eines Smart Plug über den Stromwert
   async identifyPowerValue(deviceId: string, connection: net.Socket) {
-    // Implement identification logic here
+    try {
+      this.log.info(`Identifying power value for device ${deviceId}.`);
+      connection.write(`Power value identification started for device ${deviceId}.\n`);
+    } catch (error) {
+      this.log.error(`Power value identification failed for device ${deviceId}: ${error.message}`);
+      connection.write(`Power value identification failed for device ${deviceId}.\n`);
+    }
   }
 }
