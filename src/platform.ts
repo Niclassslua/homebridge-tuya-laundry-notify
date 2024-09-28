@@ -26,7 +26,32 @@ export class TuyaLaundryNotifyPlatform implements IndependentPlatformPlugin {
 
     // Initialize ConfigManager to extract necessary configuration
     const configManager = new ConfigManager(this.config);
+    this.log.debug('Configuration Manager initialized. Fetching configuration...');
+
     const { laundryDevices, tuyaApiCredentials } = configManager.getConfig();  // Fetch the devices and API credentials
+
+    // Debug-Prints für Laundry Devices
+    if (laundryDevices && laundryDevices.length > 0) {
+      this.log.debug(`Laundry Devices Found: ${laundryDevices.length}`);
+      laundryDevices.forEach((device, index) => {
+        this.log.debug(`Device ${index + 1}: Name=${device.name}, ID=${device.id}, IP=${device.ipAddress}`);
+      });
+    } else {
+      this.log.debug('No Laundry Devices found.');
+    }
+
+    // Debug-Prints für Tuya API Credentials
+    if (tuyaApiCredentials) {
+      this.log.debug(`Tuya API Credentials:`);
+      this.log.debug(`Access ID: ${tuyaApiCredentials.accessId}`);
+      this.log.debug(`Access Key: ${tuyaApiCredentials.accessKey}`);
+      this.log.debug(`Username: ${tuyaApiCredentials.username}`);
+      this.log.debug(`Country Code: ${tuyaApiCredentials.countryCode}`);
+      this.log.debug(`App Schema: ${tuyaApiCredentials.appSchema}`);
+      this.log.debug(`Endpoint: ${tuyaApiCredentials.endpoint}`);
+    } else {
+      this.log.error('No Tuya API credentials found in configuration.');
+    }
 
     // Initialize laundry devices
     const messageGateway = new MessageGateway(log, this.config, api);

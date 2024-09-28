@@ -5,17 +5,21 @@ export class ConfigManager {
   constructor(private config: PlatformConfig & NotifyConfig) {}
 
   public getConfig() {
-    const { laundryDevices, accessId, accessKey, username, password, countryCode, appSchema, endpoint } = this.config;
+    const { laundryDevices, tuyaApiCredentials } = this.config;
 
     if (!laundryDevices || laundryDevices.length === 0) {
       throw new Error('At least one laundry device must be specified in the configuration.');
     }
 
-    if (!accessId || !accessKey || !username || !password || !countryCode || !appSchema || !endpoint) {
+    // Überprüfen, ob `tuyaApiCredentials` vorhanden sind
+    if (!tuyaApiCredentials || !tuyaApiCredentials.accessId || !tuyaApiCredentials.accessKey ||
+      !tuyaApiCredentials.username || !tuyaApiCredentials.password ||
+      !tuyaApiCredentials.countryCode || !tuyaApiCredentials.appSchema ||
+      !tuyaApiCredentials.endpoint) {
       throw new Error('Tuya API credentials and necessary fields (accessId, accessKey, username, password, countryCode, appSchema, endpoint) must be provided.');
     }
 
-    // Validate each device's required fields (id, key, ipAddress)
+    // Validierung der Gerätedaten
     laundryDevices.forEach((device) => {
       const { id, key, ipAddress } = device;
       if (!id || !key || !ipAddress) {
@@ -25,15 +29,7 @@ export class ConfigManager {
 
     return {
       laundryDevices,
-      tuyaApiCredentials: {
-        accessId,
-        accessKey,
-        username,
-        password,
-        countryCode,
-        appSchema,
-        endpoint,
-      },
+      tuyaApiCredentials,  // Gib das gesamte `tuyaApiCredentials`-Objekt zurück
     };
   }
 }
