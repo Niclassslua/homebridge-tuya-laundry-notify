@@ -18,7 +18,7 @@ export class CommandHandler {
       const index = parseInt(input, 10) - 1;
       if (index >= 0 && index < this.smartPlugsCache.length) {
         this.selectedPlug = this.smartPlugsCache[index];
-        if (this.selectedCommand === 'identify') {
+        if (this.selectedCommand === 'discover') {
           await this.smartPlugService.identifyPowerValue(this.selectedPlug.deviceId, connection);
           this.selectedCommand = '';
         } else if (this.selectedCommand === 'track') {
@@ -60,12 +60,12 @@ export class CommandHandler {
 
     // Main command logic
     switch (input) {
-      case 'identify':
+      case 'discover':
       case 'track':
       case 'calibrate': {
         this.selectedCommand = input;
 
-        // *** Starte die Discovery, wenn ein Befehl wie "identify", "track" oder "calibrate" eingegeben wurde ***
+        // *** Starte die Discovery, wenn ein Befehl wie "discover", "track" oder "calibrate" eingegeben wurde ***
         const smartPlugs = await this.smartPlugService.discoverSmartPlugs();  // Starte Discovery hier
         if (smartPlugs.length === 0) {
           connection.write('No smart plugs found.\n');
@@ -96,7 +96,7 @@ export class CommandHandler {
     const helpMessage = `
     Welcome to the Smart Plug Controller!
     Available commands:
-    1. identify  - Identify the connected smart plugs
+    1. discover  - Discover connected smart plugs
     2. track     - Track power consumption of a smart plug
     3. calibrate - Calibrate power consumption for a washing cycle
     Type a command to begin.
