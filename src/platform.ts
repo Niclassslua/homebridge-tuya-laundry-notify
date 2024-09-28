@@ -79,11 +79,12 @@ export class TuyaLaundryNotifyPlatform implements IndependentPlatformPlugin {
         this.smartPlugService = new SmartPlugService(this.apiInstance, this.log);
       } else {
         this.log.error('Failed to authenticate with Tuya API.');
+        return;
       }
 
+      // Initialize IPCServer and start it
       this.ipcServer = new IPCServer(this.log, this.config, this.smartPlugService);
       this.ipcServer.start();
-
     });
   }
 
