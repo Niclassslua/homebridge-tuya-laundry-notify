@@ -81,12 +81,9 @@ export class TuyaLaundryNotifyPlatform implements IndependentPlatformPlugin {
         this.log.error('Failed to authenticate with Tuya API.');
       }
 
-      // Sicherstellen, dass IPCServer initialisiert wurde
-      if (this.ipcServer) {
-        this.ipcServer.start();  // Start the IPC server
-      } else {
-        this.log.error('IPCServer is not initialized.');
-      }
+      this.ipcServer = new IPCServer(this.log, this.config, this.smartPlugService);
+      this.ipcServer.start();
+
     });
   }
 
