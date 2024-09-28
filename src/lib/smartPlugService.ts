@@ -63,42 +63,43 @@ export class SmartPlugService {
   }
 
   // Lokale Geräte im Netzwerk erkennen
+  // Im SmartPlugService (Anpassung der discoverDevices Methode)
   private async discoverDevices(port: number): Promise<any[]> {
     return new Promise((resolve) => {
       const socket = dgram.createSocket('udp4');
       const discoveredDevices: any[] = [];
 
       socket.on('message', async (msg, rinfo) => {
-        // Überprüfen auf doppelte Nachrichten
+        // Check for duplicate messages
         if (this.devicesSeen.has(msg.toString('hex'))) return;
         this.devicesSeen.add(msg.toString('hex'));
 
-        let data = msg.slice(20, -8); // Entfernt den Header und die Signatur
+        const data = msg.slice(20, -8);  // Entfernt den Header und die Signatur
 
         try {
-          // Versuche, die Nachricht zu entschlüsseln
-          data = Buffer.from(this.decryptUDP(data));
-        } catch (e) {
-          this.log.error('Error decrypting UDP message:', e.message);
-          return;
-        }
+          // Überprüfen, ob die Nachricht verschlüsselt ist
+          const jsonString = data.toString();
+          let jsonData = JSON.parse(jsonString);
 
-        try {
-          const dataString = data.toString();
+          if (jsonData.encrypt === true) {
+            // Entschlüsseln, wenn die Nachricht verschlüsselt ist
+            this.log.info('Decrypting encrypted message...');
+            const decryptedData = this.decryptUDP(data);
+            jsonData = JSON.parse(decryptedData);
+          }
 
-          // JSON-Validierung und Parsing
-          if (this.isValidJSON(dataString)) {
-            const jsonData = JSON.parse(dataString);
+          // Überprüfen, ob die entschlüsselte Nachricht gültig ist
+          if (this.isValidJSON(JSON.stringify(jsonData))) {
             discoveredDevices.push({
               deviceId: jsonData.gwId,
               ip: rinfo.address,
               version: jsonData.version,
             });
           } else {
-            this.log.error('Received invalid JSON data:', dataString);
+            this.log.error('Received invalid JSON data:', jsonString);
           }
         } catch (err) {
-          this.log.error('Error parsing device data:', err.message);
+          this.log.error('Error processing device data:', err.message);
         }
       });
 
@@ -107,7 +108,7 @@ export class SmartPlugService {
         setTimeout(() => {
           socket.close();
           resolve(discoveredDevices);
-        }, 5000); // Warten für 5 Sekunden auf Broadcasts, dann beenden
+        }, 5000);  // Warten für 5 Sekunden auf Broadcasts, dann beenden
       });
     });
   }
