@@ -25,20 +25,26 @@ export class CommandHandler {
         this.selectedPlug = this.smartPlugsCache[index];
         this.log.info(`Selected plug: ${JSON.stringify(this.selectedPlug)}`);
 
-        // Abfrage des gesamten DPS-Status über das lokale Netzwerk mit TuyAPI
-        const dpsStatus = await this.smartPlugService.getLocalDPS(this.selectedPlug);
-        this.log.info(`DPS Status for selected plug: ${JSON.stringify(dpsStatus)}`);
+        const dpsStatus = await this.smartPlugService.getLocalDPS(this.selectedPlug, this.log).catch(error => {
+          this.log.error(`Error retrieving DPS Status: ${error.message}`);
+          return null;
+        });
 
-        // Gebe Details des ausgewählten Geräts aus, inklusive des gesamten DPS-Status
-        connection.write(
-          `Selected device details:\n` +
-          `Name: ${this.selectedPlug.displayName}\n` +
-          `Tuya Device ID: ${this.selectedPlug.UUID}\n` +
-          `Local Key: ${this.selectedPlug.localKey || 'N/A'}\n` +
-          `IP Address: ${this.selectedPlug.ip}\n` +
-          `Protocol Version: ${this.selectedPlug.version}\n` +
-          `DPS Status: ${JSON.stringify(dpsStatus)}\n`
-        );
+        if (dpsStatus) {
+          this.log.info(`DPS Status for selected plug: ${JSON.stringify(dpsStatus)}`);
+          connection.write(
+            `Selected device details:\n` +
+            `Name: ${this.selectedPlug.displayName}\n` +
+            `Tuya Device ID: ${this.selectedPlug.deviceId}\n` +
+            `Local Key: ${this.selectedPlug.localKey || 'N/A'}\n` +
+            `IP Address: ${this.selectedPlug.ip}\n` +
+            `Protocol Version: ${this.selectedPlug.version}\n` +
+            `DPS Status: ${JSON.stringify(dpsStatus)}\n`
+          );
+        } else {
+          connection.write('Failed to retrieve DPS Status.\n');
+          this.log.error('Failed to retrieve DPS Status.');
+        }
 
         // Logs für Debugging, um zu sehen, ob der nächste Schritt korrekt gesetzt wird
         this.log.info(`Next step based on command: ${this.selectedCommand}`);
@@ -126,7 +132,7 @@ export class CommandHandler {
         this.smartPlugsCache = matchedDevices;
         let response = 'Matched smart plugs:\n';
         matchedDevices.forEach((plug, index) => {
-          response += `${index + 1}: Name: ${plug.displayName}, UUID: ${plug.UUID}, IP: ${plug.ip}\n`;
+          response += `${index + 1}: Name: ${plug.displayName}, Device ID: ${plug.deviceId}, Local Key: ${plug.localKey}, IP: ${plug.ip}\n`;
         });
 
         connection.write(response + 'Select the device number: \n');
@@ -147,7 +153,7 @@ export class CommandHandler {
 
         let response = 'Available smart plugs:\n';
         this.smartPlugsCache.forEach((plug, index) => {
-          response += `${index + 1}: Name: ${plug.displayName}, UUID: ${plug.UUID}\n`;
+          response += `${index + 1}: Name: ${plug.displayName}, Device ID: ${plug.deviceId}\n`;
         });
 
         connection.write(response + 'Select the device number: \n');

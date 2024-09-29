@@ -26,7 +26,8 @@ export class LaundryDeviceTracker {
       id: this.config.id,
       key: this.config.key,
       ip: this.config.ipAddress,
-      version: this.config.protocolVersion || '3.3',  // Default to version 3.3
+      version: this.config.protocolVersion,
+      issueGetOnConnect: true,
     });
   }
 

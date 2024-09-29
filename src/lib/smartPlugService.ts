@@ -13,36 +13,51 @@ export class SmartPlugService {
   async getLocalDPS(device: any, log: any): Promise<any> {
     try {
       const plug = new TuyAPI({
-        id: device.UUID,
+        id: device.deviceId,
         key: device.localKey,
         ip: device.ip,
-        version: device.version,  // Vergewissere dich, dass die Protokollversion korrekt ist, z.B. 3.3 oder 3.4
+        version: device.version,
+        issueGetOnConnect: true,
       });
 
-      // Suche das Gerät im lokalen Netzwerk
-      await plug.find();  // Versuche, das Gerät im LAN zu finden
+      // Find device on network
+      plug.find().then(() => {
+        // Connect to device
+        plug.connect();
+      });
 
-      // Verbinde mit dem Gerät
-      await plug.connect();  // Stelle die Verbindung her
-      log.info(`Connected to device ${device.UUID}`);
+      plug.on('connected', () => {
+        console.log('Connected to device!');
+      });
 
-      // Status des Geräts abfragen, spezifisch für die DPS-Daten
-      const status = await plug.get({ dps: 1 });  // DPS 1 ist meist der Power-Wert, passe dies ggf. an
-      log.info(`Device status (DPS 1): ${JSON.stringify(status)}`);
+      plug.on('disconnected', () => {
+        console.log('Disconnected from device.');
+      });
+
+      plug.on('error', error => {
+        console.log('Error!', error);
+      });
+
+      plug.on('dp-refresh', data => {
+        console.log('DP_REFRESH data from device: ', data);
+      });
+
+      plug.on('data', data => {
+        console.log('DATA from device: ', data);
+
+      });
+
+      const status = await plug.get({schema: true}).then(data => console.log(data))
+      log.info(`Device status: ${JSON.stringify(status)}`);
+
+      return status;
 
       // Trenne die Verbindung
       await plug.disconnect();
 
-      // Prüfen, ob der Status korrekt ist
-      if (status !== undefined && status !== null) {
-        return status;  // Rückgabe des DPS-Status
-      } else {
-        throw new Error('DPS-Status ist null oder undefined.');
-      }
-
     } catch (error) {
-      log.error(`Fehler beim Abrufen des Status für das Gerät ${device.UUID}: ${error.message}`);
-      throw new Error(`Failed to fetch DPS for device ${device.UUID}: ${error.message}`);
+      log.error(`Fehler beim Abrufen des Status für das Gerät ${device.deviceId}: ${error.message}`);
+      throw new Error(`Failed to fetch DPS for device ${device.deviceId}: ${error.message}`);
     }
   }
 
@@ -200,7 +215,6 @@ export class SmartPlugService {
 
       return devicesResponse.result.devices.filter((device: any) => device.category === 'cz').map((device: any) => ({
         displayName: device.name,
-        UUID: device.id,
         deviceId: device.id,
         localKey: device.local_key || null,
         category: device.category,
