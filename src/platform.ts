@@ -1,5 +1,5 @@
 import { API, Logger, PlatformAccessory, PlatformConfig } from 'homebridge';
-import { NotifyConfig, TuyaApiCredentials } from './interfaces/notifyConfig'; // Import new config interfaces
+import { NotifyConfig, TuyaApiCredentials } from './interfaces/notifyConfig';
 import { IndependentPlatformPlugin } from 'homebridge/lib/api';
 import { PLATFORM_NAME, PLUGIN_NAME } from './settings';
 import { LaundryDeviceTracker } from './lib/laundryDeviceTracker';
@@ -7,14 +7,14 @@ import { MessageGateway } from './lib/messageGateway';
 import { ConfigManager } from './lib/configManager';
 import { IPCServer } from './lib/ipcServer';
 import { SmartPlugService } from './lib/smartPlugService';
-import TuyaOpenAPI from './core/TuyaOpenAPI'; // Import TuyaOpenAPI for cloud interactions
+import TuyaOpenAPI from './core/TuyaOpenAPI';
 
 export class TuyaLaundryNotifyPlatform implements IndependentPlatformPlugin {
   public readonly accessories: PlatformAccessory[] = [];
   private readonly laundryDevices: LaundryDeviceTracker[] = [];
   private ipcServer!: IPCServer;
   private smartPlugService!: SmartPlugService;
-  private apiInstance: any; // To hold the instance of the Tuya API after authentication
+  private apiInstance: any;
 
   constructor(
     public readonly log: Logger,
@@ -23,13 +23,11 @@ export class TuyaLaundryNotifyPlatform implements IndependentPlatformPlugin {
   ) {
     this.log.info('TuyaLaundryNotifyPlatform initialized.');
 
-    // Initialize ConfigManager to extract necessary configuration
     const configManager = new ConfigManager(this.config);
     this.log.info('Configuration Manager initialized. Fetching configuration...');
 
-    const { laundryDevices, tuyaApiCredentials } = configManager.getConfig();  // Fetch the devices and API credentials
+    const { laundryDevices, tuyaApiCredentials } = configManager.getConfig();
 
-    // Debug-Prints für Laundry Devices
     if (laundryDevices && laundryDevices.length > 0) {
       this.log.info(`Laundry Devices Found: ${laundryDevices.length}`);
       laundryDevices.forEach((device, index) => {
@@ -39,7 +37,6 @@ export class TuyaLaundryNotifyPlatform implements IndependentPlatformPlugin {
       this.log.info('No Laundry Devices found.');
     }
 
-    // Debug-Prints für Tuya API Credentials
     if (tuyaApiCredentials) {
       this.log.info(`Tuya API Credentials:`);
       this.log.info(`Access ID: ${tuyaApiCredentials.accessId}`);
@@ -52,7 +49,6 @@ export class TuyaLaundryNotifyPlatform implements IndependentPlatformPlugin {
       this.log.error('No Tuya API credentials found in configuration.');
     }
 
-    // Initialize laundry devices
     const messageGateway = new MessageGateway(log, this.config, api);
     if (laundryDevices) {
       for (const laundryDevice of laundryDevices) {
@@ -60,42 +56,63 @@ export class TuyaLaundryNotifyPlatform implements IndependentPlatformPlugin {
       }
     }
 
-    // Perform Tuya API authentication on Homebridge launch
     this.api.on('didFinishLaunching', async () => {
       this.log.info('Homebridge has started, beginning initialization.');
 
-      // Prüfe, ob Tuya API Credentials existieren
       if (!tuyaApiCredentials) {
         this.log.error('Tuya API credentials are missing. Authentication cannot proceed.');
         return;
       }
 
-      // Authenticate with the Tuya API
       this.apiInstance = await this.authenticateTuya(tuyaApiCredentials);
 
       if (this.apiInstance) {
         this.log.info('Tuya API successfully authenticated.');
-        // Initialize SmartPlugService after authentication
         this.smartPlugService = new SmartPlugService(this.apiInstance, this.log);
       } else {
         this.log.error('Failed to authenticate with Tuya API.');
         return;
       }
 
-      // Initialize IPCServer and start it
       this.ipcServer = new IPCServer(this.log, this.config, this.smartPlugService);
       this.ipcServer.start();
+
+      if (this.config.laundryDevices) {
+        for (const laundryDevice of this.laundryDevices) {
+          try {
+            const uuid = this.api.hap.uuid.generate(laundryDevice.config.name || laundryDevice.config.id);
+            const cachedAccessory = this.accessories.find(accessory => accessory.UUID === uuid);
+
+            if (laundryDevice.config.exposeStateSwitch) {
+              if (!cachedAccessory) {
+                const accessory = new this.api.platformAccessory(laundryDevice.config.name || laundryDevice.config.id, uuid);
+                laundryDevice.accessory = accessory;
+                if (laundryDevice.accessory) {
+                  laundryDevice.accessory.addService(this.api.hap.Service.Switch, laundryDevice.config.name);
+                  this.accessories.push(laundryDevice.accessory);
+                  this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [laundryDevice.accessory]);
+                }
+              } else {
+                laundryDevice.accessory = cachedAccessory;
+              }
+            }
+
+            laundryDevice.init();
+          } catch (error) {
+            this.log.error(`Failed to init ${laundryDevice.config.name}`, error);
+          }
+        }
+      }
     });
   }
 
-  // Method to handle Tuya API authentication
   private async authenticateTuya(credentials: TuyaApiCredentials) {
     const { accessId, accessKey, username, password, countryCode, endpoint, appSchema } = credentials;
 
-    const apiInstance = new TuyaOpenAPI(endpoint, accessId, accessKey);  // Use endpoint from credentials
+    const apiInstance = new TuyaOpenAPI(endpoint, accessId, accessKey);
 
     try {
-      const res = await apiInstance.homeLogin(Number(countryCode), username, password, appSchema);  // Use appSchema from credentials
+      const res = await apiInstance.homeLogin(Number(countryCode), username, password, appSchema);
       if (res && res.success) {
         this.log.info('Successfully authenticated with Tuya OpenAPI.');
         return apiInstance;
@@ -110,7 +127,7 @@ export class TuyaLaundryNotifyPlatform implements IndependentPlatformPlugin {
   }
 
   configureAccessory(accessory: PlatformAccessory): void {
-    const deviceName = this.config.name || this.config.id;  // Fallback auf ID, falls kein Name vorhanden ist
+    const deviceName = this.config.name || this.config.id;
 
     const existingDevice = this.laundryDevices.find(laundryDevice =>
       this.api.hap.uuid.generate(deviceName) === accessory.UUID
