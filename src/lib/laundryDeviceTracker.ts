@@ -19,26 +19,29 @@ export class LaundryDeviceTracker {
     public config: LaundryDeviceConfig,
     public api: API,
   ) {
-    const deviceName = this.config.name || this.config.id;  // Fallback auf ID, falls kein Name vorhanden ist
+    const deviceName = this.config.name || this.config.deviceId;  // Fallback auf ID, falls kein Name vorhanden ist
 
     // Initialize TuyAPI device for local LAN control
     this.tuyapiDevice = new TuyAPI({
-      id: this.config.id,
-      key: this.config.key,
+      id: this.config.deviceId,
+      key: this.config.localKey,
       ip: this.config.ipAddress,
       version: this.config.protocolVersion,
       issueGetOnConnect: true,
+      issueRefreshOnConnect: true,
+      issueRefreshOnPing: true,
+      nullPayloadOnJSONError: true
     });
   }
 
   public async init() {
-    const deviceName = this.config.name || this.config.id;  // Fallback auf ID, falls kein Name vorhanden ist
+    const deviceName = this.config.name || this.config.deviceId;  // Fallback auf ID, falls kein Name vorhanden ist
 
     if (this.config.startValue < this.config.endValue) {
       throw new Error('startValue cannot be smaller than endValue.');
     }
 
-    if (!this.config.id || !this.config.key || !this.config.ipAddress) {
+    if (!this.config.deviceId || !this.config.localKey || !this.config.ipAddress) {
       this.log.warn(`Device ${deviceName} is missing required configuration (ID, Key, or IP). Initialization skipped.`);
       return;
     }
@@ -58,10 +61,10 @@ export class LaundryDeviceTracker {
 
   // Poll the device for updates every second
   private async refresh() {
-    const deviceName = this.config.name || this.config.id;  // Fallback auf ID, falls kein Name vorhanden ist
+    const deviceName = this.config.name || this.config.deviceId;  // Fallback auf ID, falls kein Name vorhanden ist
     try {
       // Fetch the current power status
-      const powerValue = await this.tuyapiDevice.get({ dps: this.config.powerValueId || '18' });  // Assuming DPS '18' for power value
+      const powerValue = await this.tuyapiDevice.refresh({ dps: this.config.powerValueId });  // Assuming DPS '18' for power value
       this.log.debug(`${deviceName} current power: ${powerValue}`);
 
       this.incomingData(powerValue);
@@ -99,7 +102,7 @@ export class LaundryDeviceTracker {
 
   // Handle incoming data (power consumption)
   private incomingData(value: number) {
-    const deviceName = this.config.name || this.config.id;  // Fallback auf ID, falls kein Name vorhanden ist
+    const deviceName = this.config.name || this.config.deviceId;  // Fallback auf ID, falls kein Name vorhanden ist
     if (value > this.config.startValue) {
       if (!this.isActive && !this.startDetected) {
         this.startDetected = true;

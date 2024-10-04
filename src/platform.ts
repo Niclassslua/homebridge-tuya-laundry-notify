@@ -31,7 +31,7 @@ export class TuyaLaundryNotifyPlatform implements IndependentPlatformPlugin {
     if (laundryDevices && laundryDevices.length > 0) {
       this.log.info(`Laundry Devices Found: ${laundryDevices.length}`);
       laundryDevices.forEach((device, index) => {
-        this.log.info(`Device ${index + 1}: Name=${device.name}, ID=${device.id}, IP=${device.ipAddress}`);
+        this.log.info(`Device ${index + 1}: Name=${device.name}, ID=${device.deviceId}, IP=${device.ipAddress}`);
       });
     } else {
       this.log.info('No Laundry Devices found.');
@@ -80,12 +80,12 @@ export class TuyaLaundryNotifyPlatform implements IndependentPlatformPlugin {
       if (this.config.laundryDevices) {
         for (const laundryDevice of this.laundryDevices) {
           try {
-            const uuid = this.api.hap.uuid.generate(laundryDevice.config.name || laundryDevice.config.id);
+            const uuid = this.api.hap.uuid.generate(laundryDevice.config.name || laundryDevice.config.deviceId);
             const cachedAccessory = this.accessories.find(accessory => accessory.UUID === uuid);
 
             if (laundryDevice.config.exposeStateSwitch) {
               if (!cachedAccessory) {
-                const accessory = new this.api.platformAccessory(laundryDevice.config.name || laundryDevice.config.id, uuid);
+                const accessory = new this.api.platformAccessory(laundryDevice.config.name || laundryDevice.config.deviceId, uuid);
                 laundryDevice.accessory = accessory;
                 if (laundryDevice.accessory) {
                   laundryDevice.accessory.addService(this.api.hap.Service.Switch, laundryDevice.config.name);
@@ -127,7 +127,7 @@ export class TuyaLaundryNotifyPlatform implements IndependentPlatformPlugin {
   }
 
   configureAccessory(accessory: PlatformAccessory): void {
-    const deviceName = this.config.name || this.config.id;
+    const deviceName = this.config.name || this.config.deviceId;
 
     const existingDevice = this.laundryDevices.find(laundryDevice =>
       this.api.hap.uuid.generate(deviceName) === accessory.UUID

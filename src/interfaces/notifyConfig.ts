@@ -22,9 +22,9 @@ export interface PushedConfig {
 }
 
 export interface LaundryDeviceConfig {
-    id: string;                  // Tuya Device ID
+    deviceId: string;                  // Tuya Device ID
     name?: string;               // Optional device name
-    key: string;                 // Tuya Device Key for local communication
+    localKey: string;                 // Tuya Device Key for local communication
     ipAddress: string;           // Device's local IP address
     powerValueId: string;        // DPS code for power consumption
     startValue: number;          // Power value to detect when the device starts

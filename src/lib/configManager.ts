@@ -21,12 +21,15 @@ export class ConfigManager {
       throw new Error('Tuya API credentials and necessary fields (accessId, accessKey, username, password, countryCode, appSchema, endpoint) must be provided.');
     }
 
+    console.log('Laundry Device Config:', this.config.laundryDevices);
+
     // Validierung der vorhandenen Gerätedaten, falls vorhanden
     if (laundryDevices && laundryDevices.length > 0) {
       laundryDevices.forEach((device) => {
-        const { id, key, ipAddress } = device;
-        if (!id || !key || !ipAddress) {
-          throw new Error(`Device ${device.name || id} must have an ID, Key, and IP Address.`);
+        const { deviceId, localKey, ipAddress } = device;
+        if (!deviceId || !localKey || !ipAddress) {
+          console.warn(`Device ${device.name || deviceId} is missing ID, Key, or IP Address and will not be monitored.`);
+          return;
         }
       });
     }

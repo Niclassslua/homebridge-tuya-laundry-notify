@@ -3,13 +3,12 @@ import { Logger } from 'homebridge';
 import net from 'net';
 import dgram from 'dgram';
 import crypto from 'crypto';
-const Chart = require('chart.js');
-const { createCanvas } = require('canvas');
+const QuickChart = require('quickchart-js');
 const fs = require('fs');
 
 export class SmartPlugService {
   private devicesSeen = new Set<string>();
-  private cachedDevices: any[] = [];  // Cache for previously discovered devices
+  private cachedDevices: any[] = [];
 
   constructor(private apiInstance: any, private log: Logger) {}
 
@@ -22,6 +21,9 @@ export class SmartPlugService {
           ip: device.ip,
           version: device.version,
           issueGetOnConnect: true,
+          issueRefreshOnConnect: true,
+          issueRefreshOnPing: true,
+          nullPayloadOnJSONError: true
         });
 
         plug.find().then(() => {
@@ -43,8 +45,8 @@ export class SmartPlugService {
 
         plug.on('data', (data) => {
           log.debug(`Data from device: ${JSON.stringify(data)}`);
-          plug.disconnect(); // Optionally disconnect after receiving the data
-          resolve(data); // Return the DPS data
+          plug.disconnect();
+          resolve(data);
         });
 
         plug.refresh({ schema: true });
@@ -60,7 +62,6 @@ export class SmartPlugService {
     });
   }
 
-  // Method to discover local devices
   async discoverLocalDevices(): Promise<any[]> {
     try {
       this.log.info('Starting LAN discovery...');
@@ -74,14 +75,14 @@ export class SmartPlugService {
 
         if (this.cachedDevices.length > 0) {
           this.log.info('Returning cached devices.');
-          return this.cachedDevices;  // If no new devices are found, return cached devices
+          return this.cachedDevices;
         }
 
         return [];
       }
 
       this.log.info(`Discovered ${allLocalDevices.length} local devices.`);
-      this.cachedDevices = allLocalDevices;  // Update the cache
+      this.cachedDevices = allLocalDevices;
 
       return allLocalDevices;
     } catch (error) {
@@ -89,50 +90,13 @@ export class SmartPlugService {
 
       if (this.cachedDevices.length > 0) {
         this.log.info('Returning cached devices after error.');
-        return this.cachedDevices;  // If an error occurs, use the cache
+        return this.cachedDevices;
       }
 
       return [];
     }
   }
 
-  // Method to match local devices with cloud devices
-  async matchLocalWithCloudDevices(localDevices: any[]): Promise<any[]> {
-    try {
-      this.log.info('Fetching devices from Tuya Cloud for comparison...');
-
-      const cloudDevices = await this.getCloudDevices();
-      if (cloudDevices.length === 0) {
-        this.log.warn('No devices found in Tuya Cloud.');
-        return [];
-      }
-
-      // Match local devices with cloud devices
-      const matchedDevices = localDevices
-        .map((localDevice) => {
-          const cloudDevice = cloudDevices.find((device) => device.deviceId === localDevice.deviceId);
-          if (cloudDevice) {
-            this.log.info(`Matched local device ${localDevice.deviceId} with cloud device ${cloudDevice.deviceId}.`);
-            return { ...localDevice, ...cloudDevice };
-          }
-          return null;
-        })
-        .filter((device) => device !== null);
-
-      if (matchedDevices.length === 0) {
-        this.log.info('No matching devices found.');
-      } else {
-        this.log.info(`Matched ${matchedDevices.length} devices with the Tuya Cloud.`);
-      }
-
-      return matchedDevices;
-    } catch (error) {
-      this.log.error(`Error matching devices with Tuya Cloud: ${error.message}`);
-      return [];
-    }
-  }
-
-  // Discover devices on the local network
   async discoverDevices(port: number): Promise<any[]> {
     return new Promise((resolve) => {
       const socket = dgram.createSocket('udp4');
@@ -142,26 +106,17 @@ export class SmartPlugService {
         if (this.devicesSeen.has(msg.toString('hex'))) return;
         this.devicesSeen.add(msg.toString('hex'));
 
-        this.log.info('Raw UDP data:', msg.toString('hex'));
-
-        let data = msg.slice(20, -8);  // Remove the header and signature
-        this.log.info('Received message length after trim:', data.length);
+        let data = msg.slice(20, -8);
 
         try {
           data = Buffer.from(this.decryptUDP(data));
-          this.log.info('Decrypted data:', data.toString('hex'));
         } catch (e) {
           this.log.error('Error decrypting UDP message:', e.message);
           return;
         }
 
-        let dataString;
-
         try {
-          dataString = data.toString('utf8').trim();
-          dataString = dataString.replace(/[^\x20-\x7E]/g, '');  // Remove non-printable characters
-
-          const jsonData = JSON.parse(dataString);
+          const jsonData = JSON.parse(data.toString());
           discoveredDevices.push({
             deviceId: jsonData.gwId,
             ip: rinfo.address,
@@ -177,70 +132,165 @@ export class SmartPlugService {
         setTimeout(() => {
           socket.close();
           resolve(discoveredDevices);
-        }, 5000);  // Wait for 5 seconds for broadcasts, then close
+        }, 5000);
       });
     });
   }
 
-  // Fetch devices from the Tuya Cloud API
+  // Method to match local devices with cloud devices
+  async matchLocalWithCloudDevices(localDevices: any[]): Promise<any[]> {
+    try {
+      this.log.info('Fetching devices from Tuya Cloud for comparison...');
+
+      // Fetch cloud devices
+      const cloudDevices = await this.getCloudDevices();
+      if (cloudDevices.length === 0) {
+        this.log.warn('No devices found in Tuya Cloud.');
+        return [];
+      }
+
+      // Match local devices with cloud devices by their deviceId
+      const matchedDevices = localDevices
+        .map((localDevice) => {
+          const cloudDevice = cloudDevices.find((device) => device.deviceId === localDevice.deviceId);
+          if (cloudDevice) {
+            this.log.info(`Matched local device ${localDevice.deviceId} with cloud device ${cloudDevice.deviceId}.`);
+            return { ...localDevice, ...cloudDevice }; // Merge local and cloud data
+          }
+          return null;
+        })
+        .filter((device) => device !== null); // Remove null entries
+
+      if (matchedDevices.length === 0) {
+        this.log.info('No matching devices found.');
+      } else {
+        this.log.info(`Matched ${matchedDevices.length} devices with the Tuya Cloud.`);
+      }
+
+      return matchedDevices;
+    } catch (error) {
+      this.log.error(`Error matching devices with Tuya Cloud: ${error.message}`);
+      return [];
+    }
+  }
+
   private async getCloudDevices(): Promise<any[]> {
     try {
+      this.log.debug('Starting to fetch cloud devices from Tuya API...');
+
+      // Anfrage an die Tuya API senden
       const devicesResponse = await this.apiInstance.get('/v1.0/iot-01/associated-users/devices');
+      this.log.debug('Response from Tuya API received:', devicesResponse);
+
+      // Überprüfen, ob die Anfrage erfolgreich war
       if (!devicesResponse.success) {
         this.log.error(`Fetching cloud devices failed. code=${devicesResponse.code}, msg=${devicesResponse.msg}`);
         return [];
       }
 
-      return devicesResponse.result.devices.filter((device: any) => device.category === 'cz').map((device: any) => ({
-        displayName: device.name,
-        deviceId: device.id,
-        localKey: device.local_key || null,
-        category: device.category,
-      }));
+      this.log.debug(`Total devices received from cloud: ${devicesResponse.result.devices.length}`);
+
+      // Filtern der Geräte nach Kategorie 'cz' und Mapping der relevanten Informationen
+      const filteredDevices = devicesResponse.result.devices
+        .filter((device: any) => {
+          const isCategoryCZ = device.category === 'cz';
+          this.log.debug(`Device ${device.id} category=${device.category}, isCategoryCZ=${isCategoryCZ}`);
+          return isCategoryCZ;
+        })
+        .map((device: any) => {
+          const deviceInfo = {
+            displayName: device.name,
+            deviceId: device.id,
+            localKey: device.local_key,
+            category: device.category,
+          };
+          this.log.debug(`Mapped device info: ${JSON.stringify(deviceInfo)}`);
+          return deviceInfo;
+        });
+
+      this.log.debug(`Filtered and mapped ${filteredDevices.length} devices from the cloud.`);
+      return filteredDevices;
+
     } catch (error) {
-      this.log.error('Error fetching cloud devices:', error);
+      this.log.error('Error fetching cloud devices:', error.message);
       return [];
     }
   }
 
-  // AES-ECB decryption for UDP messages
   private decryptUDP(msg: Buffer): string {
     const udpkey = crypto.createHash('md5').update('yGAdlopoPVldABfn').digest();
     const decipher = crypto.createDecipheriv('aes-128-ecb', udpkey, Buffer.alloc(0));
     decipher.setAutoPadding(false);
-    const decrypted = Buffer.concat([decipher.update(msg), decipher.final()]);
-    return decrypted.toString();
+    const decrypted = Buffer.concat([decipher.update(msg), decipher.final()]).toString('utf8').trim().replace(/[^\x20-\x7E]/g, '');
+
+    return decrypted;
   }
 
-  // Track power consumption and generate a chart
+  calculateInterval(duration: any): number {
+    if (duration <= 60) {
+      // For durations up to 1 minute, query every 1 second
+      return 1000;
+    } else if (duration <= 300) {
+      // For durations between 1 and 5 minutes, query every 5 seconds
+      return 5000;
+    } else if (duration <= 1800) {
+      // For durations between 5 and 30 minutes, query every 10 seconds
+      return 10000;
+    } else {
+      // For durations longer than 30 minutes, query every 30 seconds
+      return 30000;
+    }
+  }
+
+  // Using quickchart-js for chart generation
   async trackPowerConsumption(
     deviceId: string,
     localKey: string,
     powerValueId: string,
     connection: net.Socket,
-    interval: number = 10000,
-    generateChart: boolean = false,
-    duration: number | null | undefined = undefined  // Accept number, null, or undefined
+    generateChart: boolean,
+    duration: number | null | undefined,
+    retryCount: number = 3,  // Add retry count
+    retryDelay: number = 5000 // Retry delay in milliseconds
   ) {
     const powerData: number[] = [];
     const timestamps: string[] = [];
+    let stopTracking = false;
+    let retries = 0;
 
     try {
-      this.log.info(`Starting to track power consumption for device ${deviceId} with PowerValueId ${powerValueId}.`);
-      connection.write(`Starting to track power consumption for device ${deviceId} with PowerValueId ${powerValueId}.\n`);
+      this.log.info(`Starting to track power consumption for device ${deviceId} with PowerValueId ${powerValueId}. Will generate chart: ${generateChart} for duration: ${duration}`);
+      connection.write(`Starting to track power consumption for device ${deviceId} with PowerValueId ${powerValueId}. Will generate chart: ${generateChart} for duration ${duration}\n`);
 
-      const localDevices = await this.discoverLocalDevices();
-      const selectedDevice = localDevices.find((device) => device.deviceId === deviceId);
+      let selectedDevice: any = null;  // Use 'any' type or a more specific type if known
+
+      // Retry discovery loop
+      while (retries < retryCount) {
+        const localDevices = await this.discoverLocalDevices();
+        selectedDevice = localDevices.find((device: any) => device.deviceId === deviceId);
+
+        if (selectedDevice) {
+          this.log.info(`Device ${deviceId} found on the network.`);
+          selectedDevice.localKey = localKey;  // This should now work since selectedDevice is an object
+          break;
+        } else {
+          retries++;
+          this.log.warn(`Device with ID ${deviceId} not found, retrying... (${retries}/${retryCount})`);
+          connection.write(`Device with ID ${deviceId} not found, retrying... (${retries}/${retryCount})\n`);
+          await new Promise(resolve => setTimeout(resolve, retryDelay));  // Wait before retrying
+        }
+      }
+
+
       if (!selectedDevice) {
-        this.log.error(`Device with ID ${deviceId} not found on the network.`);
-        connection.write(`Device with ID ${deviceId} not found on the network.\n`);
+        this.log.error(`Device with ID ${deviceId} not found after ${retryCount} attempts.`);
+        connection.write(`Device with ID ${deviceId} not found after ${retryCount} attempts.\n`);
         return;
       }
-      selectedDevice.localKey = localKey;
-
-      this.log.info(`Discovered and selected device: ${JSON.stringify(selectedDevice)}.`);
 
       const trackingInterval = setInterval(async () => {
+        if (stopTracking) return;
+
         try {
           const dpsStatus = await this.getLocalDPS(selectedDevice, this.log);
           if (!dpsStatus) {
@@ -257,7 +307,6 @@ export class SmartPlugService {
 
           const powerValue = dpsStatus.dps[powerValueId];
           const currentTime = new Date().toLocaleTimeString();
-
           powerData.push(powerValue);
           timestamps.push(currentTime);
 
@@ -268,15 +317,18 @@ export class SmartPlugService {
           connection.write(`Error tracking power consumption for device ${deviceId}: ${error.message}\n`);
           clearInterval(trackingInterval);
         }
-      }, interval);
+      }, this.calculateInterval(duration));
 
       if (duration !== null && duration !== undefined) {
         setTimeout(() => {
+          stopTracking = true;
           clearInterval(trackingInterval);
+          this.log.info(`Stopped tracking power consumption for device ${deviceId} after ${duration} seconds.`);
           if (generateChart) {
-            this.generatePowerConsumptionChart(timestamps, powerData);
+            this.generatePowerConsumptionChart(timestamps, powerData, duration);
+            connection.write('Power consumption chart generated.\n');
           }
-        }, duration! * 1000);  // Multiply only if duration is valid
+        }, duration * 1000);
       }
     } catch (error) {
       this.log.error(`Error tracking power consumption for device ${deviceId}: ${error.message}`);
@@ -284,59 +336,89 @@ export class SmartPlugService {
     }
   }
 
-  // Function to generate a chart with Chart.js
-  generatePowerConsumptionChart(timestamps: string[], powerData: number[]) {
-    const width = 800;  // Width of the canvas
-    const height = 400;  // Height of the canvas
-    const canvas = createCanvas(width, height);
-    const ctx = canvas.getContext('2d');
+  generatePowerConsumptionChart(timestamps: string[], powerData: number[], duration: number) {
+    this.log.info('Generating power consumption chart...');
 
-    const chart = new Chart(ctx, {
+    // Dynamically adjust chart size based on duration without limiting the maximum size
+    const chartWidth = Math.max(600, duration * 10);  // Set a width proportional to duration
+    const chartHeight = Math.max(300, duration * 5); // Set a height proportional to duration
+
+    this.log.debug(`Setting chart size: width=${chartWidth}, height=${chartHeight}`);
+
+    // Instantiate QuickChart object
+    const chart = new QuickChart();
+
+    // Set dynamic chart size based on tracking duration
+    chart.setWidth(chartWidth);  // Dynamically adjust width
+    chart.setHeight(chartHeight);  // Dynamically adjust height
+
+    // Build chart data
+    chart.setConfig({
       type: 'line',
       data: {
         labels: timestamps,
-        datasets: [{
-          label: 'Power Consumption (W)',
-          data: powerData,
-          fill: false,
-          borderColor: 'blue',
-          tension: 0.1
-        }]
+        datasets: [
+          {
+            label: 'Power Consumption (Watts)',
+            data: powerData,
+            fill: false,
+            borderColor: 'rgba(75, 192, 192, 1)',
+            borderWidth: 2,
+            pointBackgroundColor: 'rgba(75, 192, 192, 1)',
+          },
+        ],
       },
       options: {
-        responsive: false,
-        scales: {
-          x: {
-            display: true,
-            title: {
-              display: true,
-              text: 'Time'
-            }
+        responsive: true,
+        title: {
+          display: true,
+          text: 'Power Consumption Over Time',
+        },
+        tooltips: {
+          enabled: true,
+          callbacks: {
+            label: function (tooltipItem: any) {
+              return `Power: ${tooltipItem.yLabel} W`;
+            },
           },
-          y: {
-            display: true,
-            title: {
+        },
+        scales: {
+          xAxes: [
+            {
               display: true,
-              text: 'Power (W)'
-            }
-          }
-        }
-      }
+              scaleLabel: {
+                display: true,
+                labelString: 'Time',
+              },
+            },
+          ],
+          yAxes: [
+            {
+              display: true,
+              scaleLabel: {
+                display: true,
+                labelString: 'Power (Watts)',
+              },
+            },
+          ],
+        },
+        plugins: {
+          datalabels: {
+            display: true,
+            align: 'top',
+            backgroundColor: 'rgba(75, 192, 192, 0.8)',
+            borderRadius: 3,
+            color: 'white',
+            font: {
+              size: 6,
+              weight: 'bold',
+            },
+            formatter: function (value: any) {
+              return `${value} W`; // Format the label to show power in Watts
+            },
+          },
+        },
+      },
     });
-
-    const buffer = canvas.toBuffer('image/png');
-    fs.writeFileSync('./power_consumption_chart.png', buffer);
-    this.log.info('Chart saved as power_consumption_chart.png');
-  }
-
-  // Method to identify a smart plug using its power value
-  async identifyPowerValue(deviceId: string, connection: net.Socket) {
-    try {
-      this.log.info(`Identifying power value for device ${deviceId}.`);
-      connection.write(`Power value identification started for device ${deviceId}.\n`);
-    } catch (error) {
-      this.log.error(`Power value identification failed for device ${deviceId}: ${error.message}`);
-      connection.write(`Power value identification failed for device ${deviceId}.\n`);
-    }
   }
 }
