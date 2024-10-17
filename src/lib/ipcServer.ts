@@ -4,17 +4,22 @@ import path from 'path';
 import os from 'os';
 import { Logger } from 'homebridge';
 import { PlatformConfig } from 'homebridge';
-import { CommandHandler } from './commandHandler';  // Importiere den CommandHandler
-import { SmartPlugService } from './smartPlugService';  // Importiere den SmartPlugService
+import { CommandHandler } from './commandHandler';
+import { TuyaApiService } from './tuyaApiService';
 
 export class IPCServer {
-  private server: net.Server | undefined;
+  private server: net.Server;
   private readonly socketPath: string;
-  private commandHandler: CommandHandler;  // Erstelle eine Instanz des CommandHandlers
+  private commandHandler: CommandHandler;
 
-  constructor(private log: Logger, private config: PlatformConfig, private smartPlugService: SmartPlugService) {
+  constructor(
+    private log: Logger,
+    private config: any,
+    private tuyaApiService: TuyaApiService
+  ) {
+    this.server = net.createServer();
     this.socketPath = path.join(os.tmpdir(), 'tuya-laundry.sock');
-    this.commandHandler = new CommandHandler(log, smartPlugService);  // Übergib sowohl log als auch den SmartPlugService
+    this.commandHandler = new CommandHandler(this.tuyaApiService, this.log);
   }
 
   public start() {

@@ -1,6 +1,8 @@
 import { Logger } from 'homebridge';
 import net from 'net';
-import { SmartPlugService } from './smartPlugService';
+import { PowerConsumptionTracker } from './powerConsumptionTracker';
+import { DeviceManager } from './deviceManager';
+import { TuyaApiService } from './tuyaApiService';
 
 export class CommandHandler {
   private selectedCommand = '';
@@ -9,7 +11,19 @@ export class CommandHandler {
   private generateChart: boolean = false;
   private duration: number | undefined = undefined;
 
-  constructor(private log: Logger, private smartPlugService: SmartPlugService) {}
+  private deviceManager: DeviceManager;
+  private powerConsumptionTracker: PowerConsumptionTracker;
+
+  constructor(private tuyaApiService: TuyaApiService, private log: Logger) {
+    const apiInstance = this.tuyaApiService.getApiInstance();
+
+    if (!apiInstance) {
+      throw new Error('Tuya API is not authenticated.');
+    }
+
+    this.deviceManager = new DeviceManager(apiInstance, this.log);
+    this.powerConsumptionTracker = new PowerConsumptionTracker(this.deviceManager, this.log);
+  }
 
   async handleCommand(input: string, connection: net.Socket) {
     input = input.trim();
@@ -31,7 +45,7 @@ export class CommandHandler {
         case 'discover': {
           this.selectedCommand = 'discover';
           connection.write('Starting LAN discovery...\n');
-          const localDevices = await this.smartPlugService.discoverLocalDevices();
+          const localDevices = await this.deviceManager.discoverLocalDevices();
 
           if (localDevices.length === 0) {
             connection.write('No LAN devices found.\n');
@@ -49,7 +63,7 @@ export class CommandHandler {
 
           connection.write(discoverLocalDevicesResponse);
 
-          const matchedDevices = await this.smartPlugService.matchLocalWithCloudDevices(localDevices);
+          const matchedDevices = await this.deviceManager.matchLocalWithCloudDevices(localDevices);
 
           if (matchedDevices.length === 0) {
             connection.write('No matching devices found in the cloud.\n');
@@ -107,7 +121,7 @@ export class CommandHandler {
           if (index >= 0 && index < this.smartPlugsCache.length) {
             this.selectedPlug = this.smartPlugsCache[index];
 
-            let dpsStatus = await this.smartPlugService.getLocalDPS(this.selectedPlug, this.log);
+            let dpsStatus = await this.deviceManager.getLocalDPS(this.selectedPlug);
 
             if (dpsStatus) {
               connection.write(
@@ -151,7 +165,7 @@ export class CommandHandler {
         }
 
         if (this.selectedPlug) {
-          await this.smartPlugService.trackPowerConsumption(
+          await this.powerConsumptionTracker.trackPowerConsumption(
             this.selectedPlug.deviceId,
             this.selectedPlug.localKey,
             powerValueId,

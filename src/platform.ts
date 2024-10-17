@@ -1,25 +1,23 @@
 import { API, Logger, PlatformAccessory, PlatformConfig } from 'homebridge';
-import { NotifyConfig, TuyaApiCredentials } from './interfaces/notifyConfig';
+import { NotifyConfig } from './interfaces/notifyConfig';
 import { IndependentPlatformPlugin } from 'homebridge/lib/api';
 import { PLATFORM_NAME, PLUGIN_NAME } from './settings';
 import { LaundryDeviceTracker } from './lib/laundryDeviceTracker';
 import { MessageGateway } from './lib/messageGateway';
 import { ConfigManager } from './lib/configManager';
 import { IPCServer } from './lib/ipcServer';
-import { SmartPlugService } from './lib/smartPlugService';
-import TuyaOpenAPI from './core/TuyaOpenAPI';
+import { TuyaApiService } from './lib/tuyaApiService';
 
 export class TuyaLaundryNotifyPlatform implements IndependentPlatformPlugin {
   public readonly accessories: PlatformAccessory[] = [];
   private readonly laundryDevices: LaundryDeviceTracker[] = [];
   private ipcServer!: IPCServer;
-  private smartPlugService!: SmartPlugService;
-  private apiInstance: any;
+  private tuyaApiService!: TuyaApiService;
 
   constructor(
     public readonly log: Logger,
     public readonly config: PlatformConfig & NotifyConfig,
-    public readonly api: API,
+    public readonly api: API
   ) {
     this.log.info('TuyaLaundryNotifyPlatform initialized.');
 
@@ -64,17 +62,19 @@ export class TuyaLaundryNotifyPlatform implements IndependentPlatformPlugin {
         return;
       }
 
-      this.apiInstance = await this.authenticateTuya(tuyaApiCredentials);
+      this.tuyaApiService = TuyaApiService.getInstance(tuyaApiCredentials, this.log);
+      await this.tuyaApiService.authenticate();
 
-      if (this.apiInstance) {
+      const apiInstance = this.tuyaApiService.getApiInstance();
+
+      if (apiInstance) {
         this.log.info('Tuya API successfully authenticated.');
-        this.smartPlugService = new SmartPlugService(this.apiInstance, this.log);
       } else {
         this.log.error('Failed to authenticate with Tuya API.');
         return;
       }
 
-      this.ipcServer = new IPCServer(this.log, this.config, this.smartPlugService);
+      this.ipcServer = new IPCServer(this.log, this.config, this.tuyaApiService);
       this.ipcServer.start();
 
       if (this.config.laundryDevices) {
@@ -104,26 +104,6 @@ export class TuyaLaundryNotifyPlatform implements IndependentPlatformPlugin {
         }
       }
     });
-  }
-
-  private async authenticateTuya(credentials: TuyaApiCredentials) {
-    const { accessId, accessKey, username, password, countryCode, endpoint, appSchema } = credentials;
-
-    const apiInstance = new TuyaOpenAPI(endpoint, accessId, accessKey);
-
-    try {
-      const res = await apiInstance.homeLogin(Number(countryCode), username, password, appSchema);
-      if (res && res.success) {
-        this.log.info('Successfully authenticated with Tuya OpenAPI.');
-        return apiInstance;
-      } else {
-        this.log.error('Authentication failed:', res ? res.msg : 'No response from API');
-        return null;
-      }
-    } catch (error) {
-      this.log.error('Error during Tuya API authentication:', error);
-      return null;
-    }
   }
 
   configureAccessory(accessory: PlatformAccessory): void {
