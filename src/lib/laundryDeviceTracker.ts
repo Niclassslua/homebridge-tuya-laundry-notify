@@ -10,6 +10,7 @@ export class LaundryDeviceTracker {
   private isActive?: boolean;
   private endDetected?: boolean;
   private endDetectedTime?: DateTime;
+  private cumulativeConsumption = 0; // in watt-seconds (W·s)
   public accessory?: PlatformAccessory;
 
   constructor(
@@ -58,7 +59,7 @@ export class LaundryDeviceTracker {
     const deviceName = this.config.name || this.config.deviceId;
     try {
       const dpsStatus = await this.smartPlugService.getLocalDPS(selectedDevice, this.log);
-      this.log.debug(`Full DPS data for ${deviceName}: ${JSON.stringify(dpsStatus?.dps || {}, null, 2)}`);
+      //this.log.debug(`Full DPS data for ${deviceName}: ${JSON.stringify(dpsStatus?.dps || {}, null, 2)}`);
 
       const powerValue = dpsStatus?.dps[this.config.powerValueId];
       this.log.debug(`Current power for ${deviceName} (DPS ${this.config.powerValueId}): ${powerValue}`);
@@ -69,6 +70,10 @@ export class LaundryDeviceTracker {
       }
 
       this.incomingData(powerValue);
+
+      if (this.isActive) {
+        this.cumulativeConsumption += powerValue; // add as watt-second (W·s)
+      }
 
       if (!this.isActive && this.startDetected && this.startDetectedTime) {
         const secondsDiff = DateTime.now().diff(this.startDetectedTime, 'seconds').seconds;
@@ -86,11 +91,16 @@ export class LaundryDeviceTracker {
         const secondsDiff = DateTime.now().diff(this.endDetectedTime, 'seconds').seconds;
         if (secondsDiff > this.config.endDuration) {
           this.log.info(`${deviceName} finished the job!`);
-          if (this.config.endMessage) {
-            await this.messageGateway.send(this.config.endMessage);
-          }
+
+          // Calculate total kWh
+          const kWhConsumed = this.cumulativeConsumption / 3600000; // Convert watt-seconds to kWh
+      
+          const endMessage = `${this.config.endMessage || ''} Totalverbrauch: ${kWhConsumed.toFixed(2)} kWh.`;
+          await this.messageGateway.send(endMessage);
+      
           this.isActive = false;
           this.updateAccessorySwitchState(false);
+          this.cumulativeConsumption = 0; // Reset for next cycle
         }
       }
     } catch (error) {
@@ -104,7 +114,7 @@ export class LaundryDeviceTracker {
     const deviceName = this.config.name || this.config.deviceId;
     this.log.debug(`Processing incoming power data for ${deviceName}: ${value}`);
 
-    if (value > this.config.startValue) {
+    if (value >= this.config.startValue) {
       if (!this.isActive && !this.startDetected) {
         this.startDetected = true;
         this.startDetectedTime = DateTime.now();
@@ -115,7 +125,7 @@ export class LaundryDeviceTracker {
       this.startDetectedTime = undefined;
     }
 
-    if (value < this.config.endValue) {
+    if (value <= this.config.endValue) {
       if (this.isActive && !this.endDetected) {
         this.endDetected = true;
         this.endDetectedTime = DateTime.now();

@@ -87,6 +87,7 @@ export class CommandHandler {
       if (localDevices.length === 0) {
         this.log.warn(Color.warning('No devices discovered on LAN.'));
         connection.write(Color.warning('No LAN devices found.\n'));
+        connection.write("RESETTING COMMAND");
         return this.resetCommand();
       }
 
@@ -95,6 +96,7 @@ export class CommandHandler {
       if (matchedDevices.length === 0) {
         this.log.warn(Color.warning('No devices matched with the cloud.'));
         connection.write(Color.warning('No matching devices found in the cloud.\n'));
+        connection.write("RESETTING COMMAND");
         return this.resetCommand();
       }
 
@@ -104,23 +106,30 @@ export class CommandHandler {
     } catch (error) {
       this.log.error(Color.error('Error during device discovery:'), error);
       connection.write(Color.error('Error during discovery.\n'));
+      connection.write("RESETTING COMMAND");
       this.resetCommand();
     }
   }
 
   private handleTrack(connection: net.Socket) {
+    connection.write("HANDLETRACK")
     this.selectedCommand = 'track';
     if (this.smartPlugsCache.length === 0) {
       connection.write(Color.warning('No devices found. Please run "discover" first.\n'));
       this.log.warn(Color.warning('No devices in smartPlugsCache.'));
+      connection.write("RESETTING COMMAND");
       this.resetCommand();
       return;
     }
     connection.write(Color.info(this.formatDeviceList(this.smartPlugsCache, 'Available smart plugs') + 'Select the device number: \n'));
+    this.selectedCommand = 'selectDeviceTrack';
   }
 
   private async handleExistingCommand(input: string, connection: net.Socket) {
     const trimmedInput = input.trim();
+
+    connection.write("SELECTED COMMAND");
+    connection.write(this.selectedCommand);
 
     if (this.selectedCommand === 'selectDevice') {
       const index = parseInt(trimmedInput, 10) - 1;
@@ -128,51 +137,84 @@ export class CommandHandler {
         this.selectedPlug = this.smartPlugsCache[index];
         await this.displayDeviceDetails(connection, this.selectedPlug);
         connection.write(Color.success("\nDevice selected successfully! You can now use 'track' or 'exportConfig' commands.\n"));
+        connection.write("RESETTING COMMAND");
         this.resetCommand();
       } else {
         connection.write(Color.warning('Invalid selection. Please enter a valid device number.\n'));
       }
-    } else if (this.selectedCommand === 'awaitingConfigName') {
-      this.configData.name = trimmedInput;
-      connection.write(Color.info("Enter the power value ID (e.g., 19): "));
-      this.selectedCommand = 'awaitingPowerValueId';
-    } else if (this.selectedCommand === 'awaitingPowerValueId') {
-      this.configData.powerValueId = trimmedInput;
-      connection.write(Color.info("Enter the start power value threshold: "));
-      this.selectedCommand = 'awaitingStartValue';
-    } else if (this.selectedCommand === 'awaitingStartValue') {
-      this.configData.startValue = parseInt(trimmedInput, 10);
-      connection.write(Color.info("Enter the duration (seconds) for start detection: "));
-      this.selectedCommand = 'awaitingStartDuration';
-    } else if (this.selectedCommand === 'awaitingStartDuration') {
-      this.configData.startDuration = parseInt(trimmedInput, 10);
-      connection.write(Color.info("Enter the end power value threshold: "));
-      this.selectedCommand = 'awaitingEndValue';
-    } else if (this.selectedCommand === 'awaitingEndValue') {
-      this.configData.endValue = parseInt(trimmedInput, 10);
-      connection.write(Color.info("Enter the duration (seconds) for end detection: "));
-      this.selectedCommand = 'awaitingEndDuration';
-    } else if (this.selectedCommand === 'awaitingEndDuration') {
-      this.configData.endDuration = parseInt(trimmedInput, 10);
-      connection.write(Color.info("Enter the start message: "));
-      this.selectedCommand = 'awaitingStartMessage';
-    } else if (this.selectedCommand === 'awaitingStartMessage') {
-      this.configData.startMessage = trimmedInput;
-      connection.write(Color.info("Enter the end message: "));
-      this.selectedCommand = 'awaitingEndMessage';
-    } else if (this.selectedCommand === 'awaitingEndMessage') {
-      this.configData.endMessage = trimmedInput;
-      connection.write(Color.info("Should the state be exposed as a switch? (true/false): "));
-      this.selectedCommand = 'awaitingExposeStateSwitch';
-    } else if (this.selectedCommand === 'awaitingExposeStateSwitch') {
-      this.configData.exposeStateSwitch = trimmedInput.toLowerCase() === 'true';
+    } else if (this.selectedCommand === 'selectDeviceTrack') {
+      const index = parseInt(trimmedInput, 10) - 1;
+      if (!isNaN(index) && index >= 0 && index < this.smartPlugsCache.length) {
+        this.selectedPlug = this.smartPlugsCache[index];
+        await this.displayDeviceDetails(connection, this.selectedPlug);
+        connection.write(Color.success("\nDevice selected successfully!\n"));
+        this.selectedCommand = 'awaitingPowerValueIdTrack';
+        this.log.info('Command set to awaitingPowerValueIdTrack');
+        connection.write('Please enter the PowerValueID (e.g.: 19): \n');
+      } else {
+        connection.write(Color.warning('Invalid selection. Please enter a valid device number.\n'));
+      }
+    } else if (this.selectedCommand === 'awaitingPowerValueIdTrack') {
+      const powerValueId = parseInt(trimmedInput, 10) - 1;
+      this.log.info(`Extracted PowerValueId: ${powerValueId}`);
 
-      // JSON ausgeben und Command zurücksetzen
-      this.displayFinalConfig(connection);
-      this.resetCommand();
+      if (!powerValueId || isNaN(Number(powerValueId))) {
+        connection.write('Invalid PowerValueID. Please try again with a valid number.\n');
+        this.log.error('Invalid PowerValueID provided.');
+        return;
+      }
+
+      if (this.selectedPlug) {
+        await this.powerConsumptionTracker.trackPowerConsumption(
+          this.selectedPlug.deviceId,
+          this.selectedPlug.localKey,
+          String(powerValueId),
+          connection,
+          this.generateChart,
+          this.duration
+        );        
+
+        this.selectedCommand = '';
+        // Reset the stored flags after use
+        this.generateChart = false;
+        this.duration = undefined;
+      } else {
+        connection.write('No valid device selected.\n');
+        this.log.error('No valid device selected for tracking.');
+      }
+    } else {
+      this.handleConfigFlow(trimmedInput, connection);
+    }
+  }
+
+  private handleConfigFlow(input: string, connection: net.Socket) {
+    const prompts: { [key: string]: { message: string; nextCommand: string; property?: string } } = {
+      'awaitingConfigName': { message: 'Enter the power value ID (e.g., 19): ', nextCommand: 'awaitingPowerValueId', property: 'name' },
+      'awaitingPowerValueId': { message: 'Enter the start power value threshold: ', nextCommand: 'awaitingStartValue', property: 'powerValueId' },
+      'awaitingStartValue': { message: 'Enter the duration (seconds) for start detection: ', nextCommand: 'awaitingStartDuration', property: 'startValue' },
+      'awaitingStartDuration': { message: 'Enter the end power value threshold: ', nextCommand: 'awaitingEndValue', property: 'startDuration' },
+      'awaitingEndValue': { message: 'Enter the duration (seconds) for end detection: ', nextCommand: 'awaitingEndDuration', property: 'endValue' },
+      'awaitingEndDuration': { message: 'Enter the start message: ', nextCommand: 'awaitingStartMessage', property: 'endDuration' },
+      'awaitingStartMessage': { message: 'Enter the end message: ', nextCommand: 'awaitingEndMessage', property: 'startMessage' },
+      'awaitingEndMessage': { message: 'Should the state be exposed as a switch? (true/false): ', nextCommand: 'awaitingExposeStateSwitch', property: 'endMessage' },
+      'awaitingExposeStateSwitch': { message: '', nextCommand: '', property: 'exposeStateSwitch' },
+    };
+
+    if (this.selectedCommand in prompts) {
+      const { message, nextCommand, property } = prompts[this.selectedCommand];
+      if (property) {
+        this.configData[property] = property === 'exposeStateSwitch' ? input.toLowerCase() === 'true' : input;
+      }
+      connection.write(Color.info(message));
+      this.selectedCommand = nextCommand || '';
+
+      if (!nextCommand) {
+        this.displayFinalConfig(connection);
+        connection.write("RESETTING COMMAND");
+        this.resetCommand();
+      }
     } else {
       connection.write(Color.warning('Unexpected input. Please start a new command.\n'));
-      this.log.warn('Received input when no command is in progress.');
     }
   }
 
@@ -221,6 +263,7 @@ export class CommandHandler {
         this.generateChart,
         this.duration
       );
+      connection.write("RESETTING COMMAND");
       this.resetCommand();
     } else {
       connection.write(Color.error('No valid device selected.\n'));

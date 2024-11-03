@@ -2,6 +2,7 @@ import { Logger } from 'homebridge';
 import axios from 'axios';
 
 export interface NtfyConfig {
+  title: string; // Ntfy title of the notification
   topic: string; // Ntfy topic to which notifications will be sent
   serverUrl?: string; // Optional custom ntfy server URL (default: https://ntfy.sh)
 }
@@ -21,7 +22,7 @@ export class NtfyGateway {
       const url = `${this.serverUrl}/${this.config.topic}`;
       await axios.post(url, message, {
         headers: {
-          'Title': 'Homebridge Notification',
+          'Title': this.config.title,
         },
       });
       this.log.debug(`Sent notification to ntfy topic ${this.config.topic}`);

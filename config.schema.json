@@ -95,6 +95,12 @@
             "type": "object",
             "title": "ntfy Notifications",
             "properties": {
+              "title": {
+                "title": "ntfy Title",
+                "type": "string",
+                "required": true,
+                "description": "ntfy title for notifications"
+              },
               "topic": {
                 "title": "ntfy Topic",
                 "type": "string",

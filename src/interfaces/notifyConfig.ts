@@ -29,6 +29,7 @@ export interface TelegramConfig {
 }
 
 export interface NtfyConfig {
+    title: string;                     // ntfy title for notifications
     topic: string;                     // ntfy topic for notifications
     serverUrl?: string;                // Optional custom server URL (default: https://ntfy.sh)
 }
