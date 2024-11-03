@@ -5,15 +5,14 @@ export class ConfigManager {
   constructor(private config: PlatformConfig & NotifyConfig) {}
 
   public getConfig() {
-    const { laundryDevices, tuyaApiCredentials } = this.config;
+    const { laundryDevices, tuyaApiCredentials, notifications } = this.config;
 
-    // Optional: Falls keine laundryDevices vorhanden sind, geben wir eine Warnung aus, brechen aber nicht ab
+    // Optional: Log a warning if no laundry devices are specified, but continue
     if (!laundryDevices || laundryDevices.length === 0) {
-      // Warnung ausgeben, aber keinen Fehler werfen
       console.warn('No laundry devices specified in the configuration. The plugin will start without monitoring any devices.');
     }
 
-    // Überprüfen, ob die Tuya API-Anmeldeinformationen vorhanden sind
+    // Check if Tuya API credentials are provided and contain necessary fields
     if (!tuyaApiCredentials || !tuyaApiCredentials.accessId || !tuyaApiCredentials.accessKey ||
       !tuyaApiCredentials.username || !tuyaApiCredentials.password ||
       !tuyaApiCredentials.countryCode || !tuyaApiCredentials.appSchema ||
@@ -23,7 +22,7 @@ export class ConfigManager {
 
     console.log('Laundry Device Config:', this.config.laundryDevices);
 
-    // Validierung der vorhandenen Gerätedaten, falls vorhanden
+    // Validate device data if available
     if (laundryDevices && laundryDevices.length > 0) {
       laundryDevices.forEach((device) => {
         const { deviceId, localKey, ipAddress } = device;
@@ -34,9 +33,11 @@ export class ConfigManager {
       });
     }
 
+    // Return the configuration, including notifications if configured
     return {
-      laundryDevices: laundryDevices || [],  // Gebe ein leeres Array zurück, falls keine Geräte definiert sind
+      laundryDevices: laundryDevices || [],  // Return an empty array if no devices are defined
       tuyaApiCredentials,
+      notifications: notifications || {},  // Include notifications or default to an empty object if not provided
     };
   }
 }

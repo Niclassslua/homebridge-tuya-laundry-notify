@@ -7,6 +7,7 @@ import { MessageGateway } from './lib/messageGateway';
 import { ConfigManager } from './lib/configManager';
 import { IPCServer } from './lib/ipcServer';
 import { TuyaApiService } from './lib/tuyaApiService';
+import { SmartPlugService } from './lib/smartPlugService';
 
 export class TuyaLaundryNotifyPlatform implements IndependentPlatformPlugin {
   public readonly accessories: PlatformAccessory[] = [];
@@ -48,9 +49,12 @@ export class TuyaLaundryNotifyPlatform implements IndependentPlatformPlugin {
     }
 
     const messageGateway = new MessageGateway(log, this.config, api);
+
+    const smartPlugService = new SmartPlugService(this.tuyaApiService, log);
+
     if (laundryDevices) {
       for (const laundryDevice of laundryDevices) {
-        this.laundryDevices.push(new LaundryDeviceTracker(log, messageGateway, laundryDevice, api));
+        this.laundryDevices.push(new LaundryDeviceTracker(log, messageGateway, laundryDevice, api, smartPlugService));
       }
     }
 

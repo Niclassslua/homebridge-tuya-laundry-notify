@@ -1,8 +1,37 @@
-// powerConsumptionTracker.ts
 import { Logger } from 'homebridge';
 import net from 'net';
 import { DeviceManager } from './deviceManager';
 const QuickChart = require('quickchart-js');
+
+class Color {
+  static reset = '\x1b[0m';
+  static red = '\x1b[31m';
+  static green = '\x1b[32m';
+  static yellow = '\x1b[33m';
+  static blue = '\x1b[34m';
+  static magenta = '\x1b[35m';
+  static cyan = '\x1b[36m';
+
+  static colorize(text: string, color: string): string {
+    return `${color}${text}${this.reset}`;
+  }
+
+  static info(text: string): string {
+    return this.colorize(text, this.cyan);
+  }
+
+  static success(text: string): string {
+    return this.colorize(text, this.green);
+  }
+
+  static warning(text: string): string {
+    return this.colorize(text, this.yellow);
+  }
+
+  static error(text: string): string {
+    return this.colorize(text, this.red);
+  }
+}
 
 export class PowerConsumptionTracker {
   private powerValues: number[] = [];
@@ -23,38 +52,40 @@ export class PowerConsumptionTracker {
   }
 
   private calculateThresholds() {
-    const averagePower =
-      this.powerValues.reduce((sum, val) => sum + val, 0) / this.powerValues.length;
+    const averagePower = this.powerValues.reduce((sum, val) => sum + val, 0) / this.powerValues.length;
     const stdDev = Math.sqrt(
       this.powerValues.reduce((sum, val) => sum + Math.pow(val - averagePower, 2), 0) /
         this.powerValues.length
     );
     this.startThreshold = averagePower + stdDev * 2;
     this.stopThreshold = averagePower + stdDev;
-    this.log.info(`New thresholds: Start ${this.startThreshold}, Stop ${this.stopThreshold}`);
+    this.log.info(Color.info(`New thresholds: Start ${this.startThreshold}, Stop ${this.stopThreshold}`));
   }
 
-  generatePowerConsumptionChart(timestamps: string[], powerData: number[], duration: number) {
-    this.log.info('Generating power consumption chart...');
-
+  async generatePowerConsumptionChart(timestamps: string[], powerData: number[], duration: number) {
+    this.log.info(Color.info('Generating power consumption chart with sliding window...'));
+  
     const chartWidth = Math.max(600, duration * 10);
     const chartHeight = Math.max(300, duration * 5);
-
-    this.log.debug(`Setting chart size: width=${chartWidth}, height=${chartHeight}`);
-
+  
+    this.log.debug(Color.info(`Setting chart size: width=${chartWidth}, height=${chartHeight}`));
+  
     const chart = new QuickChart();
-
     chart.setWidth(chartWidth);
     chart.setHeight(chartHeight);
-
+  
+    const windowSize = Math.min(powerData.length, 100);
+    const displayedPowerData = powerData.slice(-windowSize);
+    const displayedTimestamps = timestamps.slice(-windowSize);
+  
     chart.setConfig({
       type: 'line',
       data: {
-        labels: timestamps,
+        labels: displayedTimestamps,
         datasets: [
           {
             label: 'Power Consumption (Watts)',
-            data: powerData,
+            data: displayedPowerData,
             fill: false,
             borderColor: 'rgba(75, 192, 192, 1)',
             borderWidth: 2,
@@ -66,7 +97,7 @@ export class PowerConsumptionTracker {
         responsive: true,
         title: {
           display: true,
-          text: 'Power Consumption Over Time',
+          text: 'Power Consumption Over Time (Sliding Window)',
         },
         tooltips: {
           enabled: true,
@@ -114,6 +145,18 @@ export class PowerConsumptionTracker {
         },
       },
     });
+  
+    this.log.debug(Color.info(`Displaying last ${windowSize} data points in chart`));
+  
+    // Verwenden Sie die POST-Methode mit `getShortUrl`
+    try {
+      const shortUrl = await chart.getShortUrl(); // Hier await verwenden
+      this.log.info(Color.success(`Shortened Chart URL: ${shortUrl}`));
+      return shortUrl;
+    } catch (error) {
+      this.log.error(Color.error('Error generating shortened chart URL:'), error);
+      return null;
+    }
   }
 
   async trackPowerConsumption(
@@ -130,80 +173,80 @@ export class PowerConsumptionTracker {
     const timestamps: string[] = [];
     let stopTracking = false;
     let retries = 0;
-
+  
     try {
-      this.log.info(`Starting to track power consumption for device ${deviceId} with PowerValueId ${powerValueId}. Will generate chart: ${generateChart} for duration: ${duration}`);
-      connection.write(`Starting to track power consumption for device ${deviceId} with PowerValueId ${powerValueId}. Will generate chart: ${generateChart} for duration ${duration}\n`);
-
+      this.log.info(Color.info(`Starting to track power consumption for device ${deviceId} with PowerValueId ${powerValueId}. Will generate chart: ${generateChart} for duration: ${duration}`));
+      connection.write(Color.info(`Starting to track power consumption for device ${deviceId} with PowerValueId ${powerValueId}. Will generate chart: ${generateChart} for duration ${duration}\n`));
+  
       let selectedDevice: any = null;
-
+  
       while (retries < retryCount) {
         const localDevices = await this.deviceManager.discoverLocalDevices();
         selectedDevice = localDevices.find((device: any) => device.deviceId === deviceId);
-
+  
         if (selectedDevice) {
-          this.log.info(`Device ${deviceId} found on the network.`);
+          this.log.info(Color.success(`Device ${deviceId} found on the network.`));
           selectedDevice.localKey = localKey;
           break;
         } else {
           retries++;
-          this.log.warn(`Device with ID ${deviceId} not found, retrying... (${retries}/${retryCount})`);
-          connection.write(`Device with ID ${deviceId} not found, retrying... (${retries}/${retryCount})\n`);
+          this.log.warn(Color.warning(`Device with ID ${deviceId} not found, retrying... (${retries}/${retryCount})`));
+          connection.write(Color.warning(`Device with ID ${deviceId} not found, retrying... (${retries}/${retryCount})\n`));
           await new Promise(resolve => setTimeout(resolve, retryDelay));
         }
       }
-
+  
       if (!selectedDevice) {
-        this.log.error(`Device with ID ${deviceId} not found after ${retryCount} attempts.`);
-        connection.write(`Device with ID ${deviceId} not found after ${retryCount} attempts.\n`);
+        this.log.error(Color.error(`Device with ID ${deviceId} not found after ${retryCount} attempts.`));
+        connection.write(Color.error(`Device with ID ${deviceId} not found after ${retryCount} attempts.\n`));
         return;
       }
-
+  
       const trackingInterval = setInterval(async () => {
         if (stopTracking) return;
-
+  
         try {
           const dpsStatus = await this.deviceManager.getLocalDPS(selectedDevice);
           if (!dpsStatus) {
-            this.log.error('Failed to retrieve DPS Status.');
-            connection.write('Failed to retrieve DPS Status.\n');
+            this.log.error(Color.error('Failed to retrieve DPS Status.'));
+            connection.write(Color.error('Failed to retrieve DPS Status.\n'));
             return;
           }
-
+  
           if (!dpsStatus.dps.hasOwnProperty(powerValueId)) {
-            this.log.error(`PowerValueId ${powerValueId} not found in DPS data.`);
-            connection.write(`PowerValueId ${powerValueId} not found in DPS data.\n`);
+            this.log.error(Color.error(`PowerValueId ${powerValueId} not found in DPS data.`));
+            connection.write(Color.error(`PowerValueId ${powerValueId} not found in DPS data.\n`));
             return;
           }
-
+  
           const powerValue = dpsStatus.dps[powerValueId];
           const currentTime = new Date().toLocaleTimeString();
           powerData.push(powerValue);
           timestamps.push(currentTime);
-
-          this.log.info(`Power consumption value for PowerValueId ${powerValueId}: ${powerValue}.`);
-          connection.write(`Power consumption for device ${deviceId} (PowerValueId ${powerValueId}): ${powerValue} at ${currentTime}.\n`);
+  
+          this.log.info(Color.info(`Power consumption value for PowerValueId ${powerValueId}: ${powerValue}.`));
+          connection.write(Color.info(`Power consumption for device ${deviceId} (PowerValueId ${powerValueId}): ${powerValue} at ${currentTime}.\n`));
         } catch (error) {
-          this.log.error(`Error tracking power consumption for device ${deviceId}: ${error.message}`);
-          connection.write(`Error tracking power consumption for device ${deviceId}: ${error.message}\n`);
+          this.log.error(Color.error(`Error tracking power consumption for device ${deviceId}: ${error.message}`));
+          connection.write(Color.error(`Error tracking power consumption for device ${deviceId}: ${error.message}\n`));
           clearInterval(trackingInterval);
         }
       }, this.calculateInterval(duration));
-
+  
       if (duration !== null && duration !== undefined) {
-        setTimeout(() => {
+        setTimeout(async () => {
           stopTracking = true;
           clearInterval(trackingInterval);
-          this.log.info(`Stopped tracking power consumption for device ${deviceId} after ${duration} seconds.`);
+          this.log.info(Color.info(`Stopped tracking power consumption for device ${deviceId} after ${duration} seconds.`));
           if (generateChart) {
-            this.generatePowerConsumptionChart(timestamps, powerData, duration);
-            connection.write('Power consumption chart generated.\n');
+            const chartUrl = await this.generatePowerConsumptionChart(timestamps, powerData, duration); // await hinzufügen
+            connection.write(Color.success(`Power consumption chart generated. View it here: ${chartUrl}\n`));
           }
         }, duration * 1000);
       }
     } catch (error) {
-      this.log.error(`Error tracking power consumption for device ${deviceId}: ${error.message}`);
-      connection.write(`Error tracking power consumption for device ${deviceId}: ${error.message}\n`);
+      this.log.error(Color.error(`Error tracking power consumption for device ${deviceId}: ${error.message}`));
+      connection.write(Color.error(`Error tracking power consumption for device ${deviceId}: ${error.message}\n`));
     }
   }
 

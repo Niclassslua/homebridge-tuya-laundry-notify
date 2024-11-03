@@ -1,24 +1,39 @@
-import {NotifyConfig} from '../interfaces/notifyConfig';
-import {PushGateway} from './pushGateway';
-import {TelegramGateway} from './telegramGateway';
-import {API, Logger} from 'homebridge';
+import { NotifyConfig, NtfyConfig } from '../interfaces/notifyConfig';
+import { PushGateway } from './pushGateway';
+import { TelegramGateway } from './telegramGateway';
+import { NtfyGateway } from './ntfyGateway';
+import { API, Logger } from 'homebridge';
 
 export class MessageGateway {
   private pushGateway?: PushGateway;
   private telegramGateway?: TelegramGateway;
+  private ntfyGateway?: NtfyGateway;
 
   constructor(public readonly log: Logger, config: NotifyConfig, api: API) {
-    if (config.telegramBotToken) {
-      log.info('Starte Telegram Gateway');
-      this.telegramGateway = new TelegramGateway(config.telegramBotToken, log, api);
+    // Check if Telegram configuration is provided
+    if (config.notifications?.telegram?.botToken) {
+      log.info('Starting Telegram Gateway');
+      this.telegramGateway = new TelegramGateway(config.notifications.telegram.botToken, log, api);
     } else {
-      log.warn('Telegram Bot Token fehlt. Telegram-Benachrichtigungen sind nicht verfügbar.');
+      log.warn('Telegram configuration is missing or incomplete. Telegram notifications are not available.');
     }
 
-    if (config.pushed && config.pushed.appKey && config.pushed.appSecret && config.pushed.channelAlias) {
-      this.pushGateway = new PushGateway(log, config.pushed);
+    // Check if Pushed.co configuration is provided
+    if (config.notifications?.pushed) {
+      const { appKey, appSecret, channelAlias } = config.notifications.pushed;
+      if (appKey && appSecret && channelAlias) {
+        this.pushGateway = new PushGateway(log, config.notifications.pushed);
+      } else {
+        log.warn('Incomplete Pushed.co configuration. Pushed.co notifications are not available.');
+      }
+    }
+
+    // Check if ntfy configuration is provided
+    if (config.notifications?.ntfy) {
+      log.info('Starting ntfy Gateway');
+      this.ntfyGateway = new NtfyGateway(log, config.notifications.ntfy);
     } else {
-      log.warn('Pushed.co-Konfiguration ist unvollständig. Pushed.co-Benachrichtigungen sind nicht verfügbar.');
+      log.warn('ntfy configuration is missing. ntfy notifications are not available.');
     }
   }
 
@@ -29,8 +44,11 @@ export class MessageGateway {
     if (this.telegramGateway) {
       await this.telegramGateway.send(message);
     }
-    if (!this.pushGateway && !this.telegramGateway) {
-      this.log.warn('Keine Benachrichtigungs-Gateways konfiguriert. Nachricht konnte nicht gesendet werden:', message);
+    if (this.ntfyGateway) {
+      await this.ntfyGateway.send(message);
+    }
+    if (!this.pushGateway && !this.telegramGateway && !this.ntfyGateway) {
+      this.log.warn('No notification gateways configured. Message could not be sent:', message);
     }
   }
 }

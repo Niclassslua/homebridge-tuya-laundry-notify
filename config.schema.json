@@ -54,29 +54,60 @@
           }
         }
       },
-      "telegramBotToken": {
-        "title": "Telegram Bot Token",
-        "type": "string",
-        "required": false,
-        "description": "Telegram Bot Token for push notifications"
-      },
-      "pushed": {
+      "notifications": {
+        "title": "Notifications Configuration",
         "type": "object",
         "properties": {
-          "appKey": {
-            "title": "App Key",
-            "type": "string",
-            "required": false
+          "telegram": {
+            "type": "object",
+            "title": "Telegram Notifications",
+            "properties": {
+              "botToken": {
+                "title": "Telegram Bot Token",
+                "type": "string",
+                "required": false,
+                "description": "Telegram Bot Token for push notifications"
+              }
+            }
           },
-          "appSecret": {
-            "title": "App Secret",
-            "type": "string",
-            "required": false
+          "pushed": {
+            "type": "object",
+            "title": "Pushed.co Notifications",
+            "properties": {
+              "appKey": {
+                "title": "App Key",
+                "type": "string",
+                "required": false
+              },
+              "appSecret": {
+                "title": "App Secret",
+                "type": "string",
+                "required": false
+              },
+              "channelAlias": {
+                "title": "Channel Alias",
+                "type": "string",
+                "required": false
+              }
+            }
           },
-          "channelAlias": {
-            "title": "Channel Alias",
-            "type": "string",
-            "required": false
+          "ntfy": {
+            "type": "object",
+            "title": "ntfy Notifications",
+            "properties": {
+              "topic": {
+                "title": "ntfy Topic",
+                "type": "string",
+                "required": true,
+                "description": "ntfy topic for notifications"
+              },
+              "serverUrl": {
+                "title": "ntfy Server URL",
+                "type": "string",
+                "required": false,
+                "description": "Optional custom server URL for ntfy notifications (default: 'https://ntfy.sh')"
+              }
+            }
           }
         }
       },
@@ -87,7 +118,7 @@
           "type": "object",
           "properties": {
             "name": {
-              "title": "Name",
+              "title": "Device Name",
               "type": "string",
               "required": true,
               "description": "Device name for logging purposes"

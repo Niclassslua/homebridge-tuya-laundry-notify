@@ -1,8 +1,8 @@
 import { LaundryDeviceConfig } from '../interfaces/notifyConfig';
 import { API, Logger, PlatformAccessory } from 'homebridge';
 import { DateTime } from 'luxon';
-import TuyAPI from 'tuyapi';  // Import TuyAPI for LAN control
 import { MessageGateway } from './messageGateway';
+import { SmartPlugService } from './smartPlugService';
 
 export class LaundryDeviceTracker {
   private startDetected?: boolean;
@@ -10,7 +10,6 @@ export class LaundryDeviceTracker {
   private isActive?: boolean;
   private endDetected?: boolean;
   private endDetectedTime?: DateTime;
-  private tuyapiDevice: any;  // Store TuyAPI device instance
   public accessory?: PlatformAccessory;
 
   constructor(
@@ -18,54 +17,56 @@ export class LaundryDeviceTracker {
     public readonly messageGateway: MessageGateway,
     public config: LaundryDeviceConfig,
     public api: API,
+    private smartPlugService: SmartPlugService // Inject SmartPlugService
   ) {
-    const deviceName = this.config.name || this.config.deviceId;  // Fallback auf ID, falls kein Name vorhanden ist
-
-    // Initialize TuyAPI device for local LAN control
-    this.tuyapiDevice = new TuyAPI({
-      id: this.config.deviceId,
-      key: this.config.localKey,
-      ip: this.config.ipAddress,
-      version: this.config.protocolVersion,
-      issueGetOnConnect: true,
-      issueRefreshOnConnect: true,
-      issueRefreshOnPing: true,
-      nullPayloadOnJSONError: true
-    });
+    const deviceName = this.config.name || this.config.deviceId;
+    this.log.debug(`Initializing LaundryDeviceTracker with config: ${JSON.stringify(this.config, null, 2)}`);
   }
 
   public async init() {
-    const deviceName = this.config.name || this.config.deviceId;  // Fallback auf ID, falls kein Name vorhanden ist
+    const deviceName = this.config.name || this.config.deviceId;
 
     if (this.config.startValue < this.config.endValue) {
       throw new Error('startValue cannot be smaller than endValue.');
     }
 
-    if (!this.config.deviceId || !this.config.localKey || !this.config.ipAddress) {
-      this.log.warn(`Device ${deviceName} is missing required configuration (ID, Key, or IP). Initialization skipped.`);
+    // Sicherstellen, dass der localKey in der Konfiguration vorhanden ist
+    if (!this.config.localKey) {
+      this.log.error(`Missing localKey for device ${deviceName}. Please provide a valid localKey.`);
       return;
     }
 
     try {
-      // Find and connect to the device on the local network
-      await this.tuyapiDevice.find();
-      await this.tuyapiDevice.connect();
-      this.log.info(`Connected to ${deviceName} over LAN.`);
+      const localDevices = await this.smartPlugService.discoverLocalDevices();
+      const selectedDevice = localDevices.find(device => device.deviceId === this.config.deviceId);
 
-      // Start power monitoring
-      await this.refresh();
+      if (!selectedDevice) {
+        this.log.warn(`Device ${deviceName} not found on LAN.`);
+        return;
+      }
+
+      // localKey explizit dem gefundenen Gerät hinzufügen
+      selectedDevice.localKey = this.config.localKey;
+      this.log.info(`Device ${deviceName} found on LAN. Starting power tracking.`);
+      await this.refresh(selectedDevice);
     } catch (error) {
       this.log.error(`Error initializing device ${deviceName}: ${error.message}`);
     }
   }
 
-  // Poll the device for updates every second
-  private async refresh() {
-    const deviceName = this.config.name || this.config.deviceId;  // Fallback auf ID, falls kein Name vorhanden ist
+  private async refresh(selectedDevice: any) {
+    const deviceName = this.config.name || this.config.deviceId;
     try {
-      // Fetch the current power status
-      const powerValue = await this.tuyapiDevice.refresh({ dps: this.config.powerValueId });  // Assuming DPS '18' for power value
-      this.log.debug(`${deviceName} current power: ${powerValue}`);
+      const dpsStatus = await this.smartPlugService.getLocalDPS(selectedDevice, this.log);
+      this.log.debug(`Full DPS data for ${deviceName}: ${JSON.stringify(dpsStatus?.dps || {}, null, 2)}`);
+
+      const powerValue = dpsStatus?.dps[this.config.powerValueId];
+      this.log.debug(`Current power for ${deviceName} (DPS ${this.config.powerValueId}): ${powerValue}`);
+
+      if (typeof powerValue !== 'number') {
+        this.log.error(`Received invalid power value: ${powerValue} (expected a number).`);
+        return;
+      }
 
       this.incomingData(powerValue);
 
@@ -96,18 +97,18 @@ export class LaundryDeviceTracker {
       this.log.error(`Error refreshing device ${deviceName}: ${error.message}`);
     }
 
-    // Poll again after 1 second
-    setTimeout(() => this.refresh(), 1000);
+    setTimeout(() => this.refresh(selectedDevice), 1000);
   }
 
-  // Handle incoming data (power consumption)
   private incomingData(value: number) {
-    const deviceName = this.config.name || this.config.deviceId;  // Fallback auf ID, falls kein Name vorhanden ist
+    const deviceName = this.config.name || this.config.deviceId;
+    this.log.debug(`Processing incoming power data for ${deviceName}: ${value}`);
+
     if (value > this.config.startValue) {
       if (!this.isActive && !this.startDetected) {
         this.startDetected = true;
         this.startDetectedTime = DateTime.now();
-        this.log.debug(`Detected start value for ${deviceName}, waiting for ${this.config.startDuration} seconds...`);
+        this.log.debug(`Detected start value for ${deviceName}. Waiting ${this.config.startDuration} seconds for confirmation.`);
       }
     } else {
       this.startDetected = false;
@@ -118,7 +119,7 @@ export class LaundryDeviceTracker {
       if (this.isActive && !this.endDetected) {
         this.endDetected = true;
         this.endDetectedTime = DateTime.now();
-        this.log.debug(`Detected end value for ${deviceName}, waiting for ${this.config.endDuration} seconds...`);
+        this.log.debug(`Detected end value for ${deviceName}. Waiting ${this.config.endDuration} seconds for confirmation.`);
       }
     } else {
       this.endDetected = false;
@@ -126,11 +127,11 @@ export class LaundryDeviceTracker {
     }
   }
 
-  // Update the accessory switch state (if applicable)
   private updateAccessorySwitchState(isOn: boolean) {
     if (this.config.exposeStateSwitch && this.accessory) {
       const service = this.accessory.getService(this.api.hap.Service.Switch);
       service?.setCharacteristic(this.api.hap.Characteristic.On, isOn);
+      this.log.debug(`Updated accessory switch state for ${this.config.name}: ${isOn ? 'On' : 'Off'}`);
     }
   }
 }
