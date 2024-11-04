@@ -11,6 +11,7 @@ export class LaundryDeviceTracker {
   private endDetected?: boolean;
   private endDetectedTime?: DateTime;
   private cumulativeConsumption = 0; // in watt-seconds (W·s)
+  private lastMeasurementTime: DateTime = DateTime.now(); // Time of the last measurement
   public accessory?: PlatformAccessory;
 
   constructor(
@@ -18,7 +19,7 @@ export class LaundryDeviceTracker {
     public readonly messageGateway: MessageGateway,
     public config: LaundryDeviceConfig,
     public api: API,
-    private smartPlugService: SmartPlugService // Inject SmartPlugService
+    private smartPlugService: SmartPlugService
   ) {
     const deviceName = this.config.name || this.config.deviceId;
     this.log.debug(`Initializing LaundryDeviceTracker with config: ${JSON.stringify(this.config, null, 2)}`);
@@ -31,7 +32,6 @@ export class LaundryDeviceTracker {
       throw new Error('startValue cannot be smaller than endValue.');
     }
 
-    // Sicherstellen, dass der localKey in der Konfiguration vorhanden ist
     if (!this.config.localKey) {
       this.log.error(`Missing localKey for device ${deviceName}. Please provide a valid localKey.`);
       return;
@@ -46,68 +46,62 @@ export class LaundryDeviceTracker {
         return;
       }
 
-      // localKey explizit dem gefundenen Gerät hinzufügen
       selectedDevice.localKey = this.config.localKey;
       this.log.info(`Device ${deviceName} found on LAN. Starting power tracking.`);
-      await this.refresh(selectedDevice);
+      
+      this.detectStartStop(selectedDevice);
     } catch (error) {
       this.log.error(`Error initializing device ${deviceName}: ${error.message}`);
     }
   }
 
-  private async refresh(selectedDevice: any) {
-    const deviceName = this.config.name || this.config.deviceId;
-    try {
-      const dpsStatus = await this.smartPlugService.getLocalDPS(selectedDevice, this.log);
-      //this.log.debug(`Full DPS data for ${deviceName}: ${JSON.stringify(dpsStatus?.dps || {}, null, 2)}`);
+  private async detectStartStop(selectedDevice: any) {
+    setInterval(async () => {
+      try {
+        const deviceName = this.config.name || this.config.deviceId;
+        const dpsStatus = await this.smartPlugService.getLocalDPS(selectedDevice, this.log);
+        const powerValue = dpsStatus?.dps[this.config.powerValueId];
 
-      const powerValue = dpsStatus?.dps[this.config.powerValueId];
-      this.log.debug(`Current power for ${deviceName} (DPS ${this.config.powerValueId}): ${powerValue}`);
+        if (typeof powerValue !== 'number') {
+          this.log.error(`Received invalid power value: ${powerValue} (expected a number).`);
+          return;
+        }
 
-      if (typeof powerValue !== 'number') {
-        this.log.error(`Received invalid power value: ${powerValue} (expected a number).`);
-        return;
-      }
+        this.log.debug(`Current power for ${deviceName}: ${powerValue}W`);
 
-      this.incomingData(powerValue);
+        // Start detection whether the device is running
+        this.incomingData(powerValue);
 
-      if (this.isActive) {
-        this.cumulativeConsumption += powerValue; // add as watt-second (W·s)
-      }
+        if (this.isActive) {
+          // When the machine is running, monitor consumption
+          const now = DateTime.now();
+          const timeDiff = now.diff(this.lastMeasurementTime, 'seconds').seconds;
+          this.lastMeasurementTime = now;
 
-      if (!this.isActive && this.startDetected && this.startDetectedTime) {
-        const secondsDiff = DateTime.now().diff(this.startDetectedTime, 'seconds').seconds;
-        if (secondsDiff > this.config.startDuration) {
-          this.log.info(`${deviceName} started the job!`);
-          if (this.config.startMessage) {
-            await this.messageGateway.send(this.config.startMessage);
+          // Calculate the consumption in this period
+          const energyConsumed = (powerValue / 10) * timeDiff; // in watt seconds (W-s)
+          this.cumulativeConsumption += energyConsumed;
+
+          this.log.debug(`Added ${energyConsumed} W·s. Total cumulativeConsumption: ${this.cumulativeConsumption} W·s, ${(this.cumulativeConsumption / 3600000).toFixed(4)} kWh`);
+        }
+
+        // Check whether the machine has stopped
+        if (this.endDetected && this.endDetectedTime) {
+          const secondsDiff = DateTime.now().diff(this.endDetectedTime, 'seconds').seconds;
+          if (secondsDiff > this.config.endDuration && this.isActive) {
+            this.isActive = false;
+            const kWhConsumed = this.cumulativeConsumption / 3600000; // Convert watt seconds to kWh
+            this.log.info(`Device finished the job. Total consumption: ${kWhConsumed.toFixed(2)} kWh`);
+            const endMessage = `${this.config.endMessage || ''} Totalverbrauch: ${kWhConsumed.toFixed(2)} kWh.`;
+            this.messageGateway.send(endMessage);
+            this.updateAccessorySwitchState(false);
+            this.cumulativeConsumption = 0; // Reset for the next cycle
           }
-          this.isActive = true;
-          this.updateAccessorySwitchState(true);
         }
+      } catch (error) {
+        this.log.error(`Error during start/stop detection: ${error.message}`);
       }
-
-      if (this.isActive && this.endDetected && this.endDetectedTime) {
-        const secondsDiff = DateTime.now().diff(this.endDetectedTime, 'seconds').seconds;
-        if (secondsDiff > this.config.endDuration) {
-          this.log.info(`${deviceName} finished the job!`);
-
-          // Calculate total kWh
-          const kWhConsumed = this.cumulativeConsumption / 3600000; // Convert watt-seconds to kWh
-      
-          const endMessage = `${this.config.endMessage || ''} Totalverbrauch: ${kWhConsumed.toFixed(2)} kWh.`;
-          await this.messageGateway.send(endMessage);
-      
-          this.isActive = false;
-          this.updateAccessorySwitchState(false);
-          this.cumulativeConsumption = 0; // Reset for next cycle
-        }
-      }
-    } catch (error) {
-      this.log.error(`Error refreshing device ${deviceName}: ${error.message}`);
-    }
-
-    setTimeout(() => this.refresh(selectedDevice), 1000);
+    }, 1000); // Check every second
   }
 
   private incomingData(value: number) {
