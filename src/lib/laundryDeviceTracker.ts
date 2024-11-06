@@ -12,6 +12,8 @@ export class LaundryDeviceTracker {
   private endDetectedTime?: DateTime;
   private cumulativeConsumption = 0; // in watt-seconds (W·s)
   private lastMeasurementTime: DateTime = DateTime.now(); // Time of the last measurement
+  private lastDpsStatus: any = null; // Cached last DPS status
+  private currentInterval = 5000; // Dynamic update interval in milliseconds
   public accessory?: PlatformAccessory;
 
   constructor(
@@ -59,8 +61,7 @@ export class LaundryDeviceTracker {
     setInterval(async () => {
       try {
         const deviceName = this.config.name || this.config.deviceId;
-        const dpsStatus = await this.smartPlugService.getLocalDPS(selectedDevice, this.log);
-        const powerValue = dpsStatus?.dps[this.config.powerValueId];
+        const powerValue = await this.getPowerValue(selectedDevice);
 
         if (typeof powerValue !== 'number') {
           this.log.error(`Received invalid power value: ${powerValue} (expected a number).`);
@@ -68,58 +69,85 @@ export class LaundryDeviceTracker {
         }
 
         this.log.debug(`Current power for ${deviceName}: ${powerValue}W`);
-
-        // Start detection whether the device is running
         this.incomingData(powerValue);
 
-        // Check whether the machine started
-        if (!this.isActive && this.startDetected && this.startDetectedTime) {
-          const secondsDiff = DateTime.now().diff(this.startDetectedTime, 'seconds').seconds;
-          this.log.debug(`Checking start confirmation: ${secondsDiff} seconds since start detected.`);
-          
-          if (secondsDiff > this.config.startDuration) {
-            this.log.info(`${deviceName} has started!`);
-            if (this.config.startMessage) {
-              await this.messageGateway.send(this.config.startMessage);
-            }
-            this.isActive = true;
-            this.updateAccessorySwitchState(true);
-            this.cumulativeConsumption = 0; // Reset cumulative consumption for the new cycle
-            this.startDetected = false; // Reset start detection
-            this.startDetectedTime = undefined;
-          }
-        }
+        // Run the helper method to check start and stop conditions
+        await this.checkStartStopConditions(deviceName, powerValue);
 
-        if (this.isActive) {
-          // When the machine is running, monitor consumption
-          const now = DateTime.now();
-          const timeDiff = now.diff(this.lastMeasurementTime, 'seconds').seconds;
-          this.lastMeasurementTime = now;
-
-          // Calculate the consumption in this period
-          const energyConsumed = (powerValue / 10) * timeDiff; // in watt seconds (W-s)
-          this.cumulativeConsumption += energyConsumed;
-
-          this.log.debug(`Added ${energyConsumed} W·s. Total cumulativeConsumption: ${this.cumulativeConsumption} W·s, ${(this.cumulativeConsumption / 3600000).toFixed(4)} kWh`);
-        }
-
-        // Check whether the machine has stopped
-        if (this.endDetected && this.endDetectedTime) {
-          const secondsDiff = DateTime.now().diff(this.endDetectedTime, 'seconds').seconds;
-          if (secondsDiff > this.config.endDuration && this.isActive) {
-            this.isActive = false;
-            const kWhConsumed = this.cumulativeConsumption / 3600000; // Convert watt seconds to kWh
-            this.log.info(`Device finished the job. Total consumption: ${kWhConsumed.toFixed(2)} kWh`);
-            const endMessage = `${this.config.endMessage || ''} Totalverbrauch: ${kWhConsumed.toFixed(2)} kWh.`;
-            this.messageGateway.send(endMessage);
-            this.updateAccessorySwitchState(false);
-            this.cumulativeConsumption = 0; // Reset for the next cycle
-          }
-        }
       } catch (error) {
         this.log.error(`Error during start/stop detection: ${error.message}`);
       }
-    }, 1000); // Check every second
+    }, this.currentInterval);
+  }
+
+  // Helper method to get power value with caching
+  private async getPowerValue(selectedDevice: any): Promise<number | null> {
+    const dpsStatus = await this.smartPlugService.getLocalDPS(selectedDevice, this.log);
+
+    if (JSON.stringify(dpsStatus) === JSON.stringify(this.lastDpsStatus)) {
+      this.log.debug(`No change in device status for ${selectedDevice.deviceId}, skipping further checks.`);
+      return null;
+    }
+
+    this.lastDpsStatus = dpsStatus;
+    return dpsStatus?.dps[this.config.powerValueId] || null;
+  }
+
+  // Method to dynamically adjust the interval based on activity
+  private adjustInterval(isActive: boolean) {
+    this.currentInterval = isActive ? 1000 : 5000; // 1 second when active, 5 seconds when idle
+    this.log.debug(`Adjusted polling interval to ${this.currentInterval}ms based on activity.`);
+  }
+
+  // Helper method to check start and stop conditions
+  private async checkStartStopConditions(deviceName: string, powerValue: number) {
+    // Check whether the machine started
+    if (!this.isActive && this.startDetected && this.startDetectedTime) {
+      const secondsDiff = DateTime.now().diff(this.startDetectedTime, 'seconds').seconds;
+      this.log.debug(`Checking start confirmation: ${secondsDiff} seconds since start detected.`);
+
+      if (secondsDiff > this.config.startDuration) {
+        this.log.info(`${deviceName} has started!`);
+        if (this.config.startMessage) {
+          await this.messageGateway.send(this.config.startMessage);
+        }
+        this.isActive = true;
+        this.updateAccessorySwitchState(true);
+        this.cumulativeConsumption = 0; // Reset cumulative consumption for the new cycle
+        this.startDetected = false; // Reset start detection
+        this.startDetectedTime = undefined;
+        this.adjustInterval(true); // Switch to a more frequent interval
+      }
+    }
+
+    // Accumulate energy consumption if the machine is running
+    if (this.isActive) {
+      const now = DateTime.now();
+      const timeDiff = now.diff(this.lastMeasurementTime, 'seconds').seconds;
+      this.lastMeasurementTime = now;
+
+      const energyConsumed = (powerValue / 10) * timeDiff; // in watt-seconds (W-s)
+      this.cumulativeConsumption += energyConsumed;
+
+      this.log.debug(`Added ${energyConsumed} W·s. Total cumulativeConsumption: ${this.cumulativeConsumption} W·s, ${(this.cumulativeConsumption / 3600000).toFixed(4)} kWh`);
+    }
+
+    // Check whether the machine has stopped
+    if (this.endDetected && this.endDetectedTime) {
+      const secondsDiff = DateTime.now().diff(this.endDetectedTime, 'seconds').seconds;
+      if (secondsDiff > this.config.endDuration && this.isActive) {
+        this.isActive = false;
+        const kWhConsumed = this.cumulativeConsumption / 3600000; // Convert watt-seconds to kWh
+        this.log.info(`Device finished the job. Total consumption: ${kWhConsumed.toFixed(2)} kWh`);
+        const endMessage = `${this.config.endMessage || ''} Total consumption: ${kWhConsumed.toFixed(2)} kWh.`;
+        this.messageGateway.send(endMessage);
+        this.updateAccessorySwitchState(false);
+        this.cumulativeConsumption = 0; // Reset for the next cycle
+        this.endDetected = false; // Reset end detection
+        this.endDetectedTime = undefined;
+        this.adjustInterval(false); // Switch to a less frequent interval
+      }
+    }
   }
 
   private incomingData(value: number) {
