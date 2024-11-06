@@ -72,6 +72,24 @@ export class LaundryDeviceTracker {
         // Start detection whether the device is running
         this.incomingData(powerValue);
 
+        // Check whether the machine started
+        if (!this.isActive && this.startDetected && this.startDetectedTime) {
+          const secondsDiff = DateTime.now().diff(this.startDetectedTime, 'seconds').seconds;
+          this.log.debug(`Checking start confirmation: ${secondsDiff} seconds since start detected.`);
+          
+          if (secondsDiff > this.config.startDuration) {
+            this.log.info(`${deviceName} has started!`);
+            if (this.config.startMessage) {
+              await this.messageGateway.send(this.config.startMessage);
+            }
+            this.isActive = true;
+            this.updateAccessorySwitchState(true);
+            this.cumulativeConsumption = 0; // Reset cumulative consumption for the new cycle
+            this.startDetected = false; // Reset start detection
+            this.startDetectedTime = undefined;
+          }
+        }
+
         if (this.isActive) {
           // When the machine is running, monitor consumption
           const now = DateTime.now();
