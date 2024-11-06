@@ -86,11 +86,14 @@ export class LaundryDeviceTracker {
 
     if (JSON.stringify(dpsStatus) === JSON.stringify(this.lastDpsStatus)) {
       this.log.debug(`No change in device status for ${selectedDevice.deviceId}, skipping further checks.`);
-      return null;
+      return this.lastDpsStatus?.dps[this.config.powerValueId];
     }
 
     this.lastDpsStatus = dpsStatus;
-    return dpsStatus?.dps[this.config.powerValueId] || null;
+
+    // Explizit prüfen, ob powerValue definiert ist, um 0 als gültigen Wert zu akzeptieren
+    const powerValue = dpsStatus?.dps[this.config.powerValueId];
+    return powerValue !== undefined ? powerValue : null;
   }
 
   // Method to dynamically adjust the interval based on activity
