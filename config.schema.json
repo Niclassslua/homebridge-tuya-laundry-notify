@@ -4,105 +4,211 @@
   "singular": true,
   "schema": {
     "type": "object",
-      "properties": {
-        "pushed": {
-          "type": "object",
-          "properties": {
-            "appKey": {
-              "title": "App Key",
-              "type": "string",
-              "required": true
-            },
-            "appSecret": {
-              "title": "App Secret",
-              "type": "string",
-              "required": true
-            },
-            "channelAlias": {
-              "title": "Channel Alias",
-              "type": "string",
-              "required": true
-            }
+    "properties": {
+      "tuyaApiCredentials": {
+        "title": "Tuya API Credentials",
+        "type": "object",
+        "required": true,
+        "properties": {
+          "accessId": {
+            "title": "Tuya Access ID",
+            "type": "string",
+            "required": true,
+            "description": "The Access ID for your Tuya OpenAPI project"
+          },
+          "accessKey": {
+            "title": "Tuya Access Key",
+            "type": "string",
+            "required": true,
+            "description": "The Access Key for your Tuya OpenAPI project"
+          },
+          "username": {
+            "title": "Tuya Username",
+            "type": "string",
+            "required": true,
+            "description": "Your Tuya account username (usually your email address)"
+          },
+          "password": {
+            "title": "Tuya Password",
+            "type": "string",
+            "required": true,
+            "description": "Your Tuya account password"
+          },
+          "countryCode": {
+            "title": "Country Code",
+            "type": "string",
+            "required": true,
+            "description": "Country code for your account (e.g., '49' for Germany)"
+          },
+          "appSchema": {
+            "title": "Tuya App Schema",
+            "type": "string",
+            "required": true,
+            "description": "The schema for your Tuya app (e.g., 'smartlife' or 'tuyaSmart')"
+          },
+          "endpoint": {
+            "title": "Tuya API Endpoint",
+            "type": "string",
+            "required": true,
+            "description": "The endpoint for your Tuya API (e.g., 'https://openapi.tuyaeu.com')"
           }
-        },
-        "laundryDevices": {
-          "title": "Laundry Devices",
-          "type": "array",
-          "items": {
+        }
+      },
+      "notifications": {
+        "title": "Notifications Configuration",
+        "type": "object",
+        "properties": {
+          "telegram": {
             "type": "object",
+            "title": "Telegram Notifications",
             "properties": {
-              "name": {
-                "title": "Name",
-                "type": "string",
-                "required": true,
-                "description": "Device name, used for logging"
-              },
-              "id": {
-                "title": "Tuya Device ID",
-                "type": "string",
-                "required": true
-              },
-              "key": {
-                "title": "Tuya Device Key",
-                "type": "string",
-                "required": true
-              },
-              "powerValueId": {
-                "title": "Power Value ID",
-                "type": "string",
-                "required": true,
-                "description": "Property ID of the DPS return that represents current power value"
-              },
-              "startValue": {
-                "title": "Start Value",
-                "type": "number",
-                "required": true,
-                "description": "Expected power value when device started the cycle"
-              },
-              "startDuration": {
-                "title": "Start Duration",
-                "type": "number",
-                "required": true,
-                "description": "Duration in seconds that start value needs to hold until device is considered to be active."
-              },
-              "endValue": {
-                "title": "End Value",
-                "type": "number",
-                "required": true,
-                "description": "Expected power value when device finished the cycle"
-              },
-              "endDuration": {
-                "title": "End Duration",
-                "type": "number",
-                "required": true,
-                "description": "Duration in seconds that end value needs to hold until device is considered to be inactive."
-              },
-              "startMessage": {
-                "title": "Start Message",
+              "botToken": {
+                "title": "Telegram Bot Token",
                 "type": "string",
                 "required": false,
-                "description": "Optional push message when device starts the cycle",
-                "default": "Washing started..."
+                "description": "Telegram Bot Token for push notifications"
+              }
+            }
+          },
+          "pushed": {
+            "type": "object",
+            "title": "Pushed.co Notifications",
+            "properties": {
+              "appKey": {
+                "title": "App Key",
+                "type": "string",
+                "required": false
               },
-              "endMessage": {
-                "title": "Start Message",
+              "appSecret": {
+                "title": "App Secret",
+                "type": "string",
+                "required": false
+              },
+              "channelAlias": {
+                "title": "Channel Alias",
+                "type": "string",
+                "required": false
+              }
+            }
+          },
+          "ntfy": {
+            "type": "object",
+            "title": "ntfy Notifications",
+            "properties": {
+              "title": {
+                "title": "ntfy Title",
                 "type": "string",
                 "required": true,
-                "description": "Push message when device starts the cycle",
-                "default": "Washing finished!"
+                "description": "ntfy title for notifications"
               },
-              "exposeStateSwitch": {
-                "title": "Expose State Switch",
-                "type": "boolean",
+              "topic": {
+                "title": "ntfy Topic",
+                "type": "string",
+                "required": true,
+                "description": "ntfy topic for notifications"
+              },
+              "serverUrl": {
+                "title": "ntfy Server URL",
+                "type": "string",
                 "required": false,
-                "description": "Creates dummy switch that will indicate current device status, useful for extra automation",
-                "default": false
+                "description": "Optional custom server URL for ntfy notifications (default: 'https://ntfy.sh')"
               }
             }
           }
         }
+      },
+      "laundryDevices": {
+        "title": "Laundry Devices",
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "title": "Device Name",
+              "type": "string",
+              "required": true,
+              "description": "Device name for logging purposes"
+            },
+            "deviceId": {
+              "title": "Tuya Device ID",
+              "type": "string",
+              "required": true,
+              "description": "Local Tuya Device ID"
+            },
+            "localKey": {
+              "title": "Tuya Device Local Key",
+              "type": "string",
+              "required": true,
+              "description": "Local key for local device communication"
+            },
+            "ipAddress": {
+              "title": "Device IP Address",
+              "type": "string",
+              "required": true,
+              "description": "IP address of the Tuya device"
+            },
+            "protocolVersion": {
+              "title": "Tuya Protocol Version",
+              "type": "string",
+              "required": false,
+              "description": "Select the Tuya protocol version for your device",
+              "enum": ["3.1", "3.2", "3.3", "3.4"],
+              "default": "3.3"
+            },
+            "powerValueId": {
+              "title": "Power Value ID",
+              "type": "string",
+              "required": true,
+              "description": "DPS ID that represents power consumption"
+            },
+            "startValue": {
+              "title": "Start Value",
+              "type": "number",
+              "required": false,
+              "description": "Expected power value when the device starts the cycle"
+            },
+            "startDuration": {
+              "title": "Start Duration",
+              "type": "number",
+              "required": false,
+              "description": "Duration in seconds that the start value needs to hold until the device is considered active."
+            },
+            "endValue": {
+              "title": "End Value",
+              "type": "number",
+              "required": false,
+              "description": "Expected power value when the device finishes the cycle"
+            },
+            "endDuration": {
+              "title": "End Duration",
+              "type": "number",
+              "required": false,
+              "description": "Duration in seconds that the end value needs to hold until the device is considered inactive."
+            },
+            "startMessage": {
+              "title": "Start Message",
+              "type": "string",
+              "required": false,
+              "description": "Optional push message when the device starts the cycle",
+              "default": "Washing started..."
+            },
+            "endMessage": {
+              "title": "End Message",
+              "type": "string",
+              "required": false,
+              "description": "Push message when the device ends the cycle",
+              "default": "Washing finished!"
+            },
+            "exposeStateSwitch": {
+              "title": "Expose State Switch",
+              "type": "boolean",
+              "required": false,
+              "description": "Creates dummy switch that will indicate the current device status, useful for extra automation",
+              "default": false
+            }
+          }
+        }
+      }
     }
-  },
-  "form": null,
-  "display": null
+  }
 }

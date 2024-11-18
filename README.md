@@ -1,124 +1,374 @@
 <p align="center">
-
-<img src="https://github.com/homebridge/branding/raw/master/logos/homebridge-wordmark-logo-vertical.png" width="150">
-
+  <a href="https://homebridge.io"><img src="https://github.com/user-attachments/assets/6ef0d371-416d-44a0-bcd5-bfef6f0c5c4a" height="140"></a>
 </p>
 
-<img src="resources/notifications.jpg" width="375">
+<span align="center">
 
-# Homebridge Tuya Laundry Notify
+# 🧼📲 Homebridge Tuya Laundry Notify
+### A **Homebridge Plugin** that monitors laundry appliances by tracking power consumption using Tuya Smart Plugs and communicating with them over LAN, notifying users of start and stop cycles, and offering easy calibration for precise device activity detection.
 
-Homebridge plugin that lets you setup push notifications for your laundry appliances using Tuya smart plug with voltage meter.
+![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)
+![Last Commit](https://img.shields.io/github/last-commit/Niclassslua/homebridge-tuya-laundry-notify)
 
-# Installation
 
-Install this plugin using `npm i -g homebridge-tuya-laundry-notify`.
 
-# Configuration
+</span>
 
-The plugin does not expose any new home devices. It uses homebridge as a convenient place for configuration.
+---
 
-## Smart Plug
+## 📑 Table of Contents
+- [Installation](#-installation)
+- [Plugin Configuration Guide](#%EF%B8%8F-plugin-configuration-guide)
+- [Using the Tuya Laundry Notify CLI Tool](#%EF%B8%8F-how-to-use-the-tuya-laundry-notify-cli-tool)
+- [How Does the Tool Ensure Accuracy?](#%EF%B8%8F-how-does-the-tool-ensure-accuracy)
+- [How LAN Interaction Works](#-how-lan-interaction-works-)
+- [kWh Calculation: Why It Works](#-kwh-calculation-why-it-works-)
+- [Telegram Setup](#-telegram-setup)
+- [Pushed.co Setup](#-pushedco-setup)
+- [ntfy Setup](#-ntfy-setup)
+- [Notification Services Comparison](#-notification-services-comparison)
+- [Contributing](#-contributing)
+- [License](#-license)
 
-Any smart plug that support live voltage/power display in Tuya app should work, in theory. The only difference between plugs is Power Value Id - property id with live power consumption on the device.
+---
 
-### Getting device ID and Key
+## 🌟 Key Features
+- Real-time monitoring of laundry appliance power consumption via Tuya Smart Plugs.
+- Notifications for appliance start and stop cycles.
+- Easy calibration for precise cycle detection.
+- CLI tool for identifying Power Value IDs and tracking power usage.
 
-There's a standard approach to get your Tuya device ID and Key, there's a bunch of manuals around Github, I used [this](https://www.youtube.com/watch?v=oq0JL_wicKg&t=522s) video. 
+---
 
-### Identifying Power Value ID
+## 📦 Installation
 
-This plugin comes with a little CLI tool that helps you identify Power Value ID.
+Due to the custom configuration needed, the installation process is manual. Follow these steps:
 
-Install the plugin globally on your machine and run:
+1. Navigate to your Homebridge installation directory.
+2. Clone the plugin repository:
+    ```bash
+    git clone <repo-url> ./node_modules/homebridge-tuya-laundry-notify
+    ```
+3. Move into the plugin directory and install dependencies:
+    ```bash
+    cd ./node_modules/homebridge-tuya-laundry-notify
+    npm install
+    npm run build
+    ```
+4. Restart Homebridge to load the plugin.
+
+---
+
+## ⚙️ Plugin Configuration Guide
+
+This plugin doesn’t expose any new HomeKit devices. It uses Homebridge purely for configuration and integration purposes. The focus is on Tuya devices to monitor appliance power usage.
+
+### 🧩 Smart Plug Requirements
+
+Ensure that your Tuya smart plug supports real-time power or voltage display within the Tuya app. Different plugs may have unique Power Value IDs, which can be identified using this plugin’s CLI tool.
+
+---
+
+## 🛠️ How to Use the **Tuya Laundry Notify CLI Tool**
+
+### 🚀 **Step-by-Step Guide**
+
+#### 1️⃣ **Install and Start the Tool**
+Once installed, you can start interacting with the tool through an IPC socket using a command like:
 
 ```bash
-tuya-laundry identify --id <device_id> --key <device_key>
+socat - UNIX-CONNECT:/tmp/tuya-laundry.sock
 ```
 
-Make sure you have an appliance plugged into the smart plug and have it running. The tool will output live changes in properties and their values. On of them will be Power Value.
+Once connected, you'll be greeted with an interactive command prompt.
 
-<!-- TODO: put example console output here -->
+---
 
-### Monitoring Power Consumption
+## 🧩 How Does the CLI Tool Work?
 
-Once you figure out the Power Value Id you need to figure out actual value of your appliance when it's operating/finished. 
+### 🌐 Interaction with the Tool
 
-There's a second command you can use for that:
+Once the tool is launched via an IPC interface, you can perform three main functions. Typically, the interaction follows these steps:
 
-```bash
-tuya-laundry track --id <device_id> --key <device_key> --pid <power_value_id> [--margin <margin_value>]
-```
+1. Choose a command (e.g., `discover`, `track`, `exportConfig`).
+2. A list of connected smart plugs is displayed, allowing you to select the desired device.
+3. Depending on the command, you may be prompted for additional information, such as the `PowerValueID` for power monitoring or configuration parameters.
 
-Run the above command and use the appliance as you normally would - start the washing cycle and wait till it fully finished. The tool will output changes in power values and timestamps to the console. You can use `--margin` option to minimize spam in the out. Margin value is minimum percentage of the power value change that will trigger the output (e.g. `--margin 5` means it will only output new power value if the change was more than 5%).
+---
 
-<!-- TODO: put example console output here -->
+### 2️⃣ **Available Commands**
 
-## Pushed.co
+#### 🔍 **Device Discovery (`discover`)**
+This command scans your local network to find Tuya devices and matches them with Tuya Cloud.
 
-The plugin uses pushed.co service as a free (at the time of writing) and straightforward way to receive push on you devices.  
+1. Enter the command:
+   ```bash
+   discover
+   ```
+2. View the list of detected devices, including details like `Device ID` and `IP Address`.
+3. Use the displayed list to select a device for further operations.
 
-You need to install https://pushed.co app on your phone, as well as create developer account with an app and a channel.
+**Example Output:**
 
-Pushed.co configuration roughly goes like that:
+<img src="https://github.com/user-attachments/assets/bd24d9a7-39fc-42ab-bfcd-40eb4b20ef2e">
 
-1. Create pushed.co account
-2. Switch account type to Developer account
-3. Create an app
-4. Create a channel
-5. Install the pushed.co app on your device
-6. Scan channel QR code to link it with your device
-7. Make a note of app key, app secret and channel alias for the configuration below
+---
 
-## Homebridge config
+#### 📈 **Monitoring Power Consumption (`track`)**
+Use this command to monitor a device’s power consumption in real time. The tool dynamically detects start and stop cycles.
 
-The example below contains comments, clean valid JSON version is here: [example/config.json](example/config.json) 
+1. Start by entering the command:
+   ```bash
+   track
+   ```
+2. Select a device from the displayed list.
+3. Provide the `PowerValueID` (identified during discovery) when prompted.
+4. The tool will now track power usage and display live updates.
 
-```json5
-{
-  ...
-  "platforms": [
-    ...
-    /* The block you need to enable this plugin */
-    {
-      "platform": "TuyaLaundryNotify",
-      "pushed": {
-        "appKey": "tza3srI1qfDXaXEHdmYK",
-        "appSecret": "D814ZyxzevlLiEv5ZS4eegdzZG3jeYytALtFrtTeHOQ26NFEvWs1kCL3jxiGbHZu",
-        "channelAlias": "VFx7uM"
-      },
-      "laundryDevices": [
-        /* The block you need for each appliance */
-        {
-          // name is used for better logging
-          "name": "Washing Machine",
-          // Tuya smart plug id
-          "id": "424714575001911ed8d2",
-          // Tuya smart plug key
-          "key": "0a1f7b13a649766d",
-          // use tuya-laundry identify to find out the id
-          "powerValueId": "19",
-          // start power value that marks appliance active mode (greater or equal) 
-          "startValue": 20000,
-          // how many seconds start value should hold to mark appliance active mode 
-          "startDuration": 30,
-          // end power value that marks appliance finishing cycle (less or equal) 
-          "endValue": 300,
-          // how many seconds end value should hold to mark appliance finished
-          "endDuration": 30,
-          // optional start message, omit if you don't want to be notified
-          "startMessage": "⏳ Washing machine started the cycle!",
-          // optional start message, omit if you don't want to be notified 
-          "endMessage": "✅ Washing machine finished!",
-          // exposes a dummy switch that will indicate if the appliance is running
-          "exposeStateSwitch": true
-        }
-      ]
-    }
-    /* End of the block needed to enable this plugin */
-  ]
-  ...
-}
-```
+**Example Interaction:**
 
-You may add as many devices as you want, but make sure you're not exceeding Pushed.co push limits, at the time of writing it was 1000 a month for free.
+<img src="https://github.com/user-attachments/assets/026dd8b8-2880-4e6e-86a9-c954d1a919b6">
+
+---
+
+#### 🛠️ **Generate Configuration (`exportConfig`)**
+This command helps you create a configuration block for your `config.json` file by guiding you through the required fields.
+
+1. Enter the command:
+   ```bash
+   exportConfig
+   ```
+2. Select a device from the displayed list.
+3. Follow the prompts to provide configuration details like `PowerValueID`, `Start Value`, and `Stop Value`.
+4. The tool will generate a JSON configuration block, which you can copy directly into your Homebridge `config.json`.
+
+**Example Interaction:**
+
+<img src="https://github.com/user-attachments/assets/eef12f0a-bf05-416d-b006-d876c99f7545">
+
+---
+
+## 🛠️ How Does the Tool Ensure Accuracy?
+
+The tool relies on LAN communication for "real-time" data. Device states are determined dynamically by:
+1. **Power Thresholds**: Configured start and stop values based on your appliance’s power consumption.
+2. **Dynamic Calibration**: The tool adjusts tracking intervals and thresholds to account for fluctuations.
+3. **Cloud Matching**: Ensures locally discovered devices are validated via Tuya Cloud once for complete access and reliability.
+
+---
+
+## 🌐 How LAN Interaction Works ⚡
+
+The plugin communicates with your Tuya devices over **LAN (Local Area Network)** to ensure fast, reliable, and private data exchange. Here’s how it all comes together:
+
+---
+
+### 📡 **Step 1: UDP Broadcast Discovery**
+
+- **What Happens**:  
+  The plugin sends a **UDP broadcast** on common Tuya ports (`6666` and `6667`) to discover devices in your local network.  
+  These ports are used by Tuya devices to announce their presence.
+
+- **Why It Works**:  
+  When a Tuya device receives this broadcast, it replies with a data packet containing:
+  - **Device ID**: Unique identifier for the device.
+  - **IP Address**: Location of the device on your network.
+  - **Protocol Version**: Communication version used by the device.
+
+- **Security**:  
+  Only devices on the **same network** can respond, ensuring communication stays local and secure. 🌐🔒
+
+---
+
+### 🔍 **Step 2: Matching Local Devices with Cloud Data**
+
+- After discovering devices on the LAN, the plugin compares them to your **Tuya Cloud** account to:
+  - Verify that the discovered devices belong to your account.
+  - Fetch additional details like device names or categories.
+
+- **Why This Step Is Important**:  
+  - Prevents unauthorized devices from being controlled.
+  - Ensures accurate device identification, especially for homes with multiple smart plugs.
+
+---
+
+### ⚙️ **Step 3: Device Control and Monitoring**
+
+- Once a device is matched and identified, the plugin connects directly to the device using:
+  - **Device IP Address**: For direct communication.
+  - **Local Key**: A secure key used for encrypting and decrypting messages.
+
+- **Real-Time Data**:  
+  The plugin sends commands and reads data, such as **power consumption**, in real time. This ensures:
+  - No delays from cloud servers.
+  - Offline operation without relying on an internet connection.
+
+---
+
+### 🌟 **Why LAN Interaction is Awesome**
+
+1. **💨 Faster Communication**:  
+   No delays caused by internet servers. Everything happens locally.
+
+2. **🔒 More Privacy**:  
+   Data stays within your home network, keeping your smart home secure.
+
+3. **🌐 Internet Independence**:  
+   Your devices can function even if your internet connection goes down.
+
+---
+
+## 📊 kWh Calculation: Why It Works ⚡
+
+The plugin calculates your appliance’s energy consumption in **kilowatt-hours (kWh)** using real-time power monitoring.
+
+### ⚙️ **How It Works**
+
+1. **Real-Time Monitoring**:
+   - Power values (in watts) are tracked frequently via the smart plug’s `PowerValueID`.
+
+2. **Energy Accumulation**:
+   - Energy is calculated over each interval using the formula:  
+     `Energy (W·s) = Power (W) × Time Interval (s)`
+   - These values are summed for the entire cycle.
+
+3. **Conversion to kWh**:
+   - The total energy in watt-seconds is converted to kilowatt-hours:  
+     `Energy (kWh) = Energy (W·s) ÷ 3,600,000`
+
+4. **Dynamic Sampling**:
+   - Active appliances are sampled every second for precision, idle appliances every 5 seconds for efficiency.
+
+---
+
+### 🧮 **Example**
+
+- An appliance drawing **500W** for **30 minutes**:  
+  `Energy (kWh) = (500 × 1800) ÷ 3,600,000 = 0.25 kWh`  
+- Notification: **"Washing finished! Total consumption: 0.25 kWh."**
+
+---
+
+### 🌟 **Why It Matters**
+
+- **Monitor Costs**: Know your appliance’s electricity usage.  
+- **Spot Inefficiencies**: Identify unusual consumption.  
+- **Stay Sustainable**: Reduce and optimize energy use. 🌍💡
+
+--- 
+
+## 📡 Push Notifications Setup 🚀
+
+The plugin integrates with **Telegram**, **Pushed.co**, and **ntfy** to keep you informed about your appliances' start and stop cycles. Choose your preferred notification service and follow the steps below for setup!
+
+---
+
+### 🔔 **Telegram Setup**
+
+1. **Create a Telegram Bot** 🤖:
+   - Open [BotFather](https://t.me/BotFather) in Telegram.
+   - Send `/newbot` and follow the instructions to create a new bot.
+   - Save the **Bot Token** provided.
+
+2. **Activate Your Bot**:
+   - Search for your bot in Telegram and start a chat.
+   - Send `/start` to activate the bot.
+
+3. **Find Your Chat ID**:
+   - Send a message to your bot.
+   - Visit the URL below, replacing `<YourBotToken>` with your bot's token:
+     ```
+     https://api.telegram.org/bot<YourBotToken>/getUpdates
+     ```
+   - Look for `"chat":{"id":<YourChatID>}` in the response.
+
+4. **Add to Plugin Config**:
+   ```json
+   "notifications": {
+     "telegram": {
+       "botToken": "<YourBotToken>",
+       "chatId": "<YourChatID>"
+     }
+   }
+   ```
+
+---
+
+### 🔔 **Pushed.co Setup**
+
+1. **Create an Account** 🌐:
+   - Sign up at [Pushed.co](https://pushed.co/).
+
+2. **Enable Developer Mode**:
+   - Log in and switch to Developer mode.
+
+3. **Create an App & Channel**:
+   - Create a new app and channel in the Pushed.co dashboard.
+
+4. **Link Your Device**:
+   - Download the Pushed.co app on your phone.
+   - Scan the channel QR code to link it to your device.
+
+5. **Add to Plugin Config**:
+   ```json
+   "notifications": {
+     "pushed": {
+       "appKey": "<YourAppKey>",
+       "appSecret": "<YourAppSecret>",
+       "channelAlias": "<YourChannelAlias>"
+     }
+   }
+   ```
+
+---
+
+### 🔔 **ntfy Setup**
+
+1. **Create a Topic** 🛠️:
+   - Visit [ntfy.sh](https://ntfy.sh) and create a unique topic for notifications.
+
+2. **Install the ntfy App** 📱:
+   - Download the ntfy app from your device's app store.
+   - Subscribe to your topic within the app.
+
+3. **Add to Plugin Config**:
+   ```json
+   "notifications": {
+     "ntfy": {
+       "title": "Notification Title",
+       "topic": "YourTopic",
+       "serverUrl": "https://ntfy.sh"
+     }
+   }
+   ```
+
+---
+
+### 🆚 **Notification Services Comparison**
+
+| 🔔 Service    | 📱 Supported Devices                  | 🌍 Regional Availability |
+|---------------|---------------------------------------|--------------------------|
+| [**Telegram**](https://telegram.org)  | iOS, Android, Windows, macOS, Linux, Web | Global 🌎             |
+| [**Pushed.co**](https://pushed.co) | iOS, Android                          | Global 🌍             |
+| [**ntfy**](https://ntfy.sh)      | iOS, Android, Windows, macOS, Linux, Web  | Global 🌏             |
+
+---
+
+## 🤝 Contributing
+
+We welcome contributions! If you want to contribute, please follow these steps:
+1. Fork the repository.
+2. Create a new branch (`git checkout -b feature-branch`).
+3. Commit your changes (`git commit -am 'Add new feature'`).
+4. Push to the branch (`git push origin feature-branch`).
+5. Open a pull request.
+
+---
+
+## 📝 License
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+
+---
+
+Made with ❤️
