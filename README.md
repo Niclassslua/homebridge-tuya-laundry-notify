@@ -20,7 +20,7 @@
 - [Installation](#-installation)
 - [Plugin Configuration Guide](#%EF%B8%8F-plugin-configuration-guide)
 - [Using the Tuya Laundry Notify CLI Tool](#%EF%B8%8F-how-to-use-the-tuya-laundry-notify-cli-tool)
-- [How Does the CLI Tool Work?](#-how-does-the-cli-tool-work)
+- [How Does the Tool Ensure Accuracy?](#%EF%B8%8F-how-does-the-tool-ensure-accuracy)
 - [Push Notifications with Pushed.co](#-push-notifications-with-pushedco)
 - [Contributing](#-contributing)
 - [License](#-license)
