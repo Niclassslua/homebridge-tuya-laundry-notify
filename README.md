@@ -22,7 +22,6 @@
 - [Using the Tuya Laundry Notify CLI Tool](#%EF%B8%8F-how-to-use-the-tuya-laundry-notify-cli-tool)
 - [How Does the CLI Tool Work?](#-how-does-the-cli-tool-work)
 - [Push Notifications with Pushed.co](#-push-notifications-with-pushedco)
-- [Homebridge Configuration](#%EF%B8%8F-homebridge-configuration)
 - [Contributing](#-contributing)
 - [License](#-license)
 
@@ -63,16 +62,6 @@ This plugin doesn’t expose any new HomeKit devices. It uses Homebridge purely 
 
 Ensure that your Tuya smart plug supports real-time power or voltage display within the Tuya app. Different plugs may have unique Power Value IDs, which can be identified using this plugin’s CLI tool.
 
-### 🔍 Identifying Power Value ID
-
-The plugin provides a CLI tool to help identify the correct Power Value ID. To use it, run:
-
-```bash
-tuya-laundry identify --id <device_id> --key <device_key>
-```
-
-Ensure your appliance is running while connected to the smart plug. The tool will output real-time property changes. One of the values will represent power consumption.
-
 ---
 
 ## 🛠️ How to Use the **Tuya Laundry Notify CLI Tool**
@@ -94,161 +83,259 @@ Once connected, you'll be greeted with an interactive command prompt.
 
 ### 🌐 Interaction with the Tool
 
-Once the tool is launched via an IPC interface, you can choose between three main functions. Typically, the interaction follows several steps:
+Once the tool is launched via an IPC interface, you can perform three main functions. Typically, the interaction follows these steps:
 
-1. You select a function (e.g., `identify`, `track`, `calibrate`).
-2. A list of connected smart plugs is displayed, allowing you to choose the corresponding plug.
-3. For the `track` and `calibrate` functions, you need to specify a `PowerValueID`, which reflects the device's power consumption.
-
-### 🛠️ Algorithms Behind the Tool
-
-#### 🔍 Device Identification
-
-During device identification, a list of device parameters collected from your smart plug is displayed. You can observe these values in real-time and identify which DPS code reflects the energy consumption of your device.
+1. Choose a command (e.g., `discover`, `track`, `exportConfig`).
+2. A list of connected smart plugs is displayed, allowing you to select the desired device.
+3. Depending on the command, you may be prompted for additional information, such as the `PowerValueID` for power monitoring or configuration parameters.
 
 ---
 
-#### 2️⃣ **Available Commands**
+### 2️⃣ **Available Commands**
 
-After connecting, you can choose from several commands:
-
-##### 🔍 **Device Identification (`identify`)**
-This command helps you determine which DPS value corresponds to the power consumption of your device.
+#### 🔍 **Device Discovery (`discover`)**
+This command scans your local network to find Tuya devices and matches them with Tuya Cloud.
 
 1. Enter the command:
    ```bash
-   identify
+   discover
    ```
-2. Choose your Smart Plug by selecting its number from the displayed list.
-3. Watch the real-time output as it identifies different DPS values. The one showing power consumption is the PowerValueID.
+2. View the list of detected devices, including details like `Device ID` and `IP Address`.
+3. Use the displayed list to select a device for further operations.
 
-##### 📈 **Monitoring Power Consumption (`track`)**
-Use `track` to monitor your device’s power consumption continuously. The tool detects when the appliance starts or stops working.
+**Example Output:**
+```bash
+> discover
+Starting LAN discovery...
+Matched smart plugs:
+1: Name: Washing Machine, Device ID: 123456789, IP: 192.168.1.10
+2: Name: Dryer, Device ID: 987654321, IP: 192.168.1.11
+Select the device number:
+```
 
-1. Enter the command:
+---
+
+#### 📈 **Monitoring Power Consumption (`track`)**
+Use this command to monitor a device’s power consumption in real time. The tool dynamically detects start and stop cycles.
+
+1. Start by entering the command:
    ```bash
    track
    ```
-2. Select the Smart Plug you want to monitor.
-3. Input the PowerValueID (identified using the `identify` command). The tool will now begin tracking power usage in real time.
+2. Select a device from the displayed list.
+3. Provide the `PowerValueID` (identified during discovery) when prompted.
+4. The tool will now track power usage and display live updates.
 
-##### 🛠️ **Calibration (`calibrate`)**
-Calibrate your device for accurate start and stop thresholds:
+**Example Interaction:**
+```bash
+> track
+Available smart plugs:
+1: Name: Washing Machine, Device ID: 123456789, IP: 192.168.1.10
+Select the device number:
+> 1
+Device selected successfully!
+Please enter the PowerValueID (e.g., 19):
+> 19
+Tracking power consumption for Washing Machine...
+Power consumption: 520 W
+Power consumption: 530 W
+...
+```
+
+---
+
+#### 🛠️ **Generate Configuration (`exportConfig`)**
+This command helps you create a configuration block for your `config.json` file by guiding you through the required fields.
 
 1. Enter the command:
    ```bash
-   calibrate
+   exportConfig
    ```
-2. Select the Smart Plug you want to calibrate.
-3. Turn the appliance on when prompted to collect active usage data, then turn it off to collect inactive data. The tool will calculate the ideal thresholds for start and stop values.
+2. Select a device from the displayed list.
+3. Follow the prompts to provide configuration details like `PowerValueID`, `Start Value`, and `Stop Value`.
+4. The tool will generate a JSON configuration block, which you can copy directly into your Homebridge `config.json`.
 
----
+**Example Interaction:**
+```bash
+> exportConfig
+Available smart plugs:
+1: Name: Washing Machine, Device ID: 123456789, IP: 192.168.1.10
+Select the device number:
+> 1
+Enter the name of the device:
+> Washing Machine
+Enter the power value ID (e.g., 19):
+> 19
+Enter the start power value threshold:
+> 2000
+Enter the duration (seconds) for start detection:
+> 30
+Enter the end power value threshold:
+> 300
+Enter the duration (seconds) for end detection:
+> 30
+Should the state be exposed as a switch? (true/false):
+> true
 
-### 🛠️ Algorithms Behind the Tool
-
-#### 📈 Power Consumption Monitoring
-
-Monitoring works by tracking the current power consumption every few seconds. A dynamic algorithm is employed here:
-
-- **Start and Stop Thresholds**: The tool dynamically adjusts start and stop thresholds based on the average of recent power consumption values and their standard deviation.
-  - **Start Threshold**: When the average power exceeds twice the standard deviation, the tool identifies the device as active.
-  - **Stop Threshold**: If the value falls below a lower threshold, the device is considered inactive.
-
-This approach provides precise and adaptive detection of device states without requiring rigid thresholds.
-
-#### ⚙️ Calibration
-
-Calibration takes you through two phases: active and inactive device data collection. During this process, median values of the collected data are used to determine accurate thresholds. This method accounts for typical fluctuations in consumption, ensuring the thresholds are set to reflect the real behavior of your device.
-
----
-
-### 👨‍💻 Why Do These Algorithms Work?
-
-#### 📊 Standard Deviation & Average
-
-- **Why Use Average and Standard Deviation?**  
-  Devices like washing machines often exhibit fluctuations in power consumption depending on their current function. The average gives a reliable estimation of typical consumption, while the standard deviation indicates how much the value fluctuates.
-
-  - A consumption value significantly above the standard deviation suggests that the device is active (e.g., during a spin cycle).
-  - When the value drops below the standard deviation, it suggests the cycle is complete.
-
-#### 🛠️ Median Values in Calibration
-
-- **Why Median Values?**  
-  The median is less susceptible to outliers than the average. By using the median power values, random spikes or drops are ignored, leading to more robust detection of start and end states.
-
----
-
-### 🚦 In Summary
-
-With the **Tuya Laundry Notify CLI Tool**, you get a flexible and intelligent solution for monitoring the power consumption of your smart home appliances. Thanks to dynamic thresholds based on statistical algorithms and the ability to calibrate the system, you can tailor the setup to meet your device's unique requirements.
-
-### 🧭 **Typical Workflow**
-
-1. **Identify Power Value**: First, run the `identify` command to find the correct DPS code for power consumption.
-2. **Track Usage**: Use the `track` command with the identified DPS code to monitor the appliance’s power consumption in real time.
-3. **Calibrate**: For more precise monitoring, run the `calibrate` command to adjust the thresholds for start and stop cycles.
-
----
-
-## 📡 Push Notifications with Pushed.co
-
-To receive notifications about the appliance's start and stop cycles, the plugin integrates with **Pushed.co**.
-
-### Steps to Set Up Pushed.co:
-1. Create an account on [Pushed.co](https://pushed.co/).
-2. Switch your account to Developer mode.
-3. Create an app and a channel.
-4. Install the Pushed.co app on your phone and scan the channel QR code to link it with your device.
-5. Note the **App Key**, **App Secret**, and **Channel Alias** for use in the plugin configuration.
-
----
-
-## 🛠️ Homebridge Configuration
-
-The following configuration block sets up the plugin in your Homebridge instance:
-
-```json5
+Generated Config:
 {
-  "platforms": [
-    {
-      "platform": "TuyaLaundryNotify",
-      "pushed": {
-        "appKey": "<your_app_key>",
-        "appSecret": "<your_app_secret>",
-        "channelAlias": "<your_channel_alias>"
-      },
-      "laundryDevices": [
-        {
-          "name": "Washing Machine",
-          "id": "<device_id>",
-          "key": "<device_key>",
-          "powerValueId": "<power_value_id>",
-          "startValue": 20000,
-          "startDuration": 30,
-          "endValue": 300,
-          "endDuration": 30,
-          "startMessage": "⏳ Washing machine started!",
-          "endMessage": "✅ Washing machine finished!",
-          "exposeStateSwitch": true
-        }
-      ]
-    }
-  ]
+  "deviceId": "123456789",
+  "name": "Washing Machine",
+  "localKey": "abc123...",
+  "ipAddress": "192.168.1.10",
+  "powerValueId": "19",
+  "startValue": 2000,
+  "startDuration": 30,
+  "endValue": 300,
+  "endDuration": 30,
+  "exposeStateSwitch": true
 }
 ```
 
-- **name**: Friendly name for better logging.
-- **id**: Tuya device ID of the smart plug.
-- **key**: Secure communication key of the device.
-- **powerValueId**: The identified DPS code representing power consumption.
-- **startValue**: Power consumption value indicating the appliance has started.
-- **startDuration**: Time (in seconds) the start value must hold to confirm the appliance is running.
-- **endValue**: Power value indicating the appliance has finished its cycle.
-- **endDuration**: Time (in seconds) the end value must hold to confirm the cycle has finished.
-- **startMessage / endMessage**: Optional push notifications via Pushed.co.
+---
 
-You can add as many devices as needed, keeping in mind the Pushed.co monthly limits.
+## 🛠️ How Does the Tool Ensure Accuracy?
+
+The tool relies on LAN communication for "real-time" data. Device states are determined dynamically by:
+1. **Power Thresholds**: Configured start and stop values based on your appliance’s power consumption.
+2. **Dynamic Calibration**: The tool adjusts tracking intervals and thresholds to account for fluctuations.
+3. **Cloud Matching**: Ensures locally discovered devices are validated via Tuya Cloud once for complete access and reliability.
+
+---
+
+## 📊 kWh Calculation: Why It Works ⚡
+
+The plugin calculates your appliance’s energy consumption in **kilowatt-hours (kWh)** using real-time power monitoring.
+
+### ⚙️ **How It Works**
+
+1. **Real-Time Monitoring**:
+   - Power values (in watts) are tracked frequently via the smart plug’s `PowerValueID`.
+
+2. **Energy Accumulation**:
+   - Energy is calculated over each interval using the formula:  
+     `Energy (W·s) = Power (W) × Time Interval (s)`
+   - These values are summed for the entire cycle.
+
+3. **Conversion to kWh**:
+   - The total energy in watt-seconds is converted to kilowatt-hours:  
+     `Energy (kWh) = Energy (W·s) ÷ 3,600,000`
+
+4. **Dynamic Sampling**:
+   - Active appliances are sampled every second for precision, idle appliances every 5 seconds for efficiency.
+
+---
+
+### 🧮 **Example**
+
+- An appliance drawing **500W** for **30 minutes**:  
+  `Energy (kWh) = (500 × 1800) ÷ 3,600,000 = 0.25 kWh`  
+- Notification: **"Washing finished! Total consumption: 0.25 kWh."**
+
+---
+
+### 🌟 **Why It Matters**
+
+- **Monitor Costs**: Know your appliance’s electricity usage.  
+- **Spot Inefficiencies**: Identify unusual consumption.  
+- **Stay Sustainable**: Reduce and optimize energy use. 🌍💡
+
+--- 
+
+## 📡 Push Notifications Setup 🚀
+
+The plugin integrates with **Telegram**, **Pushed.co**, and **ntfy** to keep you informed about your appliances' start and stop cycles. Choose your preferred notification service and follow the steps below for setup!
+
+---
+
+### 🔔 **Telegram Setup**
+
+1. **Create a Telegram Bot** 🤖:
+   - Open [BotFather](https://t.me/BotFather) in Telegram.
+   - Send `/newbot` and follow the instructions to create a new bot.
+   - Save the **Bot Token** provided.
+
+2. **Activate Your Bot**:
+   - Search for your bot in Telegram and start a chat.
+   - Send `/start` to activate the bot.
+
+3. **Find Your Chat ID**:
+   - Send a message to your bot.
+   - Visit the URL below, replacing `<YourBotToken>` with your bot's token:
+     ```
+     https://api.telegram.org/bot<YourBotToken>/getUpdates
+     ```
+   - Look for `"chat":{"id":<YourChatID>}` in the response.
+
+4. **Add to Plugin Config**:
+   ```json
+   "notifications": {
+     "telegram": {
+       "botToken": "<YourBotToken>",
+       "chatId": "<YourChatID>"
+     }
+   }
+   ```
+
+---
+
+### 🔔 **Pushed.co Setup**
+
+1. **Create an Account** 🌐:
+   - Sign up at [Pushed.co](https://pushed.co/).
+
+2. **Enable Developer Mode**:
+   - Log in and switch to Developer mode.
+
+3. **Create an App & Channel**:
+   - Create a new app and channel in the Pushed.co dashboard.
+
+4. **Link Your Device**:
+   - Download the Pushed.co app on your phone.
+   - Scan the channel QR code to link it to your device.
+
+5. **Add to Plugin Config**:
+   ```json
+   "notifications": {
+     "pushed": {
+       "appKey": "<YourAppKey>",
+       "appSecret": "<YourAppSecret>",
+       "channelAlias": "<YourChannelAlias>"
+     }
+   }
+   ```
+
+---
+
+### 🔔 **ntfy Setup**
+
+1. **Create a Topic** 🛠️:
+   - Visit [ntfy.sh](https://ntfy.sh) and create a unique topic for notifications.
+
+2. **Install the ntfy App** 📱:
+   - Download the ntfy app from your device's app store.
+   - Subscribe to your topic within the app.
+
+3. **Add to Plugin Config**:
+   ```json
+   "notifications": {
+     "ntfy": {
+       "title": "Notification Title",
+       "topic": "YourTopic",
+       "serverUrl": "https://ntfy.sh"
+     }
+   }
+   ```
+
+---
+
+### 🆚 **Notification Services Comparison**
+
+| 🔔 Service    | 📱 Supported Devices                  | 🌍 Regional Availability |
+|---------------|---------------------------------------|--------------------------|
+| [**Telegram**](https://telegram.org)  | iOS, Android, Windows, macOS, Linux, Web | Global 🌎             |
+| [**Pushed.co**](https://pushed.co) | iOS, Android                          | Global 🌍             |
+| [**ntfy**](https://ntfy.sh)      | iOS, Android, Windows, macOS, Linux, Web  | Global 🌏             |
 
 ---
 
