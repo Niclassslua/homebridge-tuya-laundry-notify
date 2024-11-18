@@ -104,14 +104,8 @@ This command scans your local network to find Tuya devices and matches them with
 3. Use the displayed list to select a device for further operations.
 
 **Example Output:**
-```bash
-> discover
-Starting LAN discovery...
-Matched smart plugs:
-1: Name: Washing Machine, Device ID: 123456789, IP: 192.168.1.10
-2: Name: Dryer, Device ID: 987654321, IP: 192.168.1.11
-Select the device number:
-```
+
+<img src="https://github.com/user-attachments/assets/2099fb04-f775-4414-8d30-d9409cda2ede" height="398" width="795">
 
 ---
 
