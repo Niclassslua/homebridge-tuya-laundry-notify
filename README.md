@@ -105,7 +105,7 @@ This command scans your local network to find Tuya devices and matches them with
 
 **Example Output:**
 
-<img src="https://github.com/user-attachments/assets/2099fb04-f775-4414-8d30-d9409cda2ede" height="398" width="795">
+<img src="https://github.com/user-attachments/assets/bd24d9a7-39fc-42ab-bfcd-40eb4b20ef2e">
 
 ---
 
@@ -121,20 +121,8 @@ Use this command to monitor a device’s power consumption in real time. The too
 4. The tool will now track power usage and display live updates.
 
 **Example Interaction:**
-```bash
-> track
-Available smart plugs:
-1: Name: Washing Machine, Device ID: 123456789, IP: 192.168.1.10
-Select the device number:
-> 1
-Device selected successfully!
-Please enter the PowerValueID (e.g., 19):
-> 19
-Tracking power consumption for Washing Machine...
-Power consumption: 520 W
-Power consumption: 530 W
-...
-```
+
+<img src="https://github.com/user-attachments/assets/026dd8b8-2880-4e6e-86a9-c954d1a919b6">
 
 ---
 
@@ -150,41 +138,8 @@ This command helps you create a configuration block for your `config.json` file 
 4. The tool will generate a JSON configuration block, which you can copy directly into your Homebridge `config.json`.
 
 **Example Interaction:**
-```bash
-> exportConfig
-Available smart plugs:
-1: Name: Washing Machine, Device ID: 123456789, IP: 192.168.1.10
-Select the device number:
-> 1
-Enter the name of the device:
-> Washing Machine
-Enter the power value ID (e.g., 19):
-> 19
-Enter the start power value threshold:
-> 2000
-Enter the duration (seconds) for start detection:
-> 30
-Enter the end power value threshold:
-> 300
-Enter the duration (seconds) for end detection:
-> 30
-Should the state be exposed as a switch? (true/false):
-> true
 
-Generated Config:
-{
-  "deviceId": "123456789",
-  "name": "Washing Machine",
-  "localKey": "abc123...",
-  "ipAddress": "192.168.1.10",
-  "powerValueId": "19",
-  "startValue": 2000,
-  "startDuration": 30,
-  "endValue": 300,
-  "endDuration": 30,
-  "exposeStateSwitch": true
-}
-```
+<img src="https://github.com/user-attachments/assets/eef12f0a-bf05-416d-b006-d876c99f7545">
 
 ---
 
@@ -194,6 +149,67 @@ The tool relies on LAN communication for "real-time" data. Device states are det
 1. **Power Thresholds**: Configured start and stop values based on your appliance’s power consumption.
 2. **Dynamic Calibration**: The tool adjusts tracking intervals and thresholds to account for fluctuations.
 3. **Cloud Matching**: Ensures locally discovered devices are validated via Tuya Cloud once for complete access and reliability.
+
+---
+
+## 🌐 How LAN Interaction Works ⚡
+
+The plugin communicates with your Tuya devices over **LAN (Local Area Network)** to ensure fast, reliable, and private data exchange. Here’s how it all comes together:
+
+---
+
+### 📡 **Step 1: UDP Broadcast Discovery**
+
+- **What Happens**:  
+  The plugin sends a **UDP broadcast** on common Tuya ports (`6666` and `6667`) to discover devices in your local network.  
+  These ports are used by Tuya devices to announce their presence.
+
+- **Why It Works**:  
+  When a Tuya device receives this broadcast, it replies with a data packet containing:
+  - **Device ID**: Unique identifier for the device.
+  - **IP Address**: Location of the device on your network.
+  - **Protocol Version**: Communication version used by the device.
+
+- **Security**:  
+  Only devices on the **same network** can respond, ensuring communication stays local and secure. 🌐🔒
+
+---
+
+### 🔍 **Step 2: Matching Local Devices with Cloud Data**
+
+- After discovering devices on the LAN, the plugin compares them to your **Tuya Cloud** account to:
+  - Verify that the discovered devices belong to your account.
+  - Fetch additional details like device names or categories.
+
+- **Why This Step Is Important**:  
+  - Prevents unauthorized devices from being controlled.
+  - Ensures accurate device identification, especially for homes with multiple smart plugs.
+
+---
+
+### ⚙️ **Step 3: Device Control and Monitoring**
+
+- Once a device is matched and identified, the plugin connects directly to the device using:
+  - **Device IP Address**: For direct communication.
+  - **Local Key**: A secure key used for encrypting and decrypting messages.
+
+- **Real-Time Data**:  
+  The plugin sends commands and reads data, such as **power consumption**, in real time. This ensures:
+  - No delays from cloud servers.
+  - Offline operation without relying on an internet connection.
+
+---
+
+### 🌟 **Why LAN Interaction is Awesome**
+
+1. **💨 Faster Communication**:  
+   No delays caused by internet servers. Everything happens locally.
+
+2. **🔒 More Privacy**:  
+   Data stays within your home network, keeping your smart home secure.
+
+3. **🌐 Internet Independence**:  
+   Your devices can function even if your internet connection goes down.
 
 ---
 
