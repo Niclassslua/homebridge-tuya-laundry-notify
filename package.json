@@ -12,7 +12,7 @@
     "url": "github.com/Niclassslua/homebridge-tuya-laundry-notify/issues"
   },
   "engines": {
-    "node": ">=16.0.0",
+    "node": ">=18.0.0",
     "homebridge": ">=1.6.0"
   },
   "main": "dist/index.js",
