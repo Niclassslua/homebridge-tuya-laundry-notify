@@ -28,22 +28,22 @@ export class TuyaLaundryNotifyPlatform implements IndependentPlatformPlugin {
     const { laundryDevices, tuyaApiCredentials } = configManager.getConfig();
 
     if (laundryDevices && laundryDevices.length > 0) {
-      this.log.info(`Laundry Devices Found: ${laundryDevices.length}`);
+      this.log.info('Laundry Devices Found: ${laundryDevices.length}');
       laundryDevices.forEach((device, index) => {
-        this.log.info(`Device ${index + 1}: Name=${device.name}, ID=${device.deviceId}, IP=${device.ipAddress}`);
+        this.log.info('Device ${index + 1}: Name=${device.name}, ID=${device.deviceId}, IP=${device.ipAddress}');
       });
     } else {
       this.log.info('No Laundry Devices found.');
     }
 
     if (tuyaApiCredentials) {
-      this.log.info(`Tuya API Credentials:`);
-      this.log.info(`Access ID: ${tuyaApiCredentials.accessId}`);
-      this.log.info(`Access Key: ${tuyaApiCredentials.accessKey}`);
-      this.log.info(`Username: ${tuyaApiCredentials.username}`);
-      this.log.info(`Country Code: ${tuyaApiCredentials.countryCode}`);
-      this.log.info(`App Schema: ${tuyaApiCredentials.appSchema}`);
-      this.log.info(`Endpoint: ${tuyaApiCredentials.endpoint}`);
+      this.log.info('Tuya API Credentials:');
+      this.log.info('Access ID: ${tuyaApiCredentials.accessId}');
+      this.log.info('Access Key: ${tuyaApiCredentials.accessKey}');
+      this.log.info('Username: ${tuyaApiCredentials.username}');
+      this.log.info('Country Code: ${tuyaApiCredentials.countryCode}');
+      this.log.info('App Schema: ${tuyaApiCredentials.appSchema}');
+      this.log.info('Endpoint: ${tuyaApiCredentials.endpoint}');
     } else {
       this.log.error('No Tuya API credentials found in configuration.');
     }
@@ -103,7 +103,7 @@ export class TuyaLaundryNotifyPlatform implements IndependentPlatformPlugin {
 
             laundryDevice.init();
           } catch (error) {
-            this.log.error(`Failed to init ${laundryDevice.config.name}`, error);
+            this.log.error('Failed to init ${laundryDevice.config.name}', error);
           }
         }
       }
