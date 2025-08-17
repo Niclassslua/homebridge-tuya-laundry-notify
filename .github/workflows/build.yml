@@ -5,30 +5,27 @@ on: [push, pull_request]
 jobs:
   build:
     runs-on: ubuntu-latest
-
-    strategy:
-      matrix:
-        # the Node.js versions to build on
-        node-version: [14.x]
-
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
 
-      - name: Use Node.js ${{ matrix.node-version }} 
-        uses: actions/setup-node@v1
+      - name: Use Node.js 20 LTS
+        uses: actions/setup-node@v4
         with:
-          node-version: ${{ matrix.node-version }}
+          node-version: '20'
+          cache: 'npm'
 
-      - name: Install dependencies
-        run: npm install
+      - name: Clean install (fresh lockfile)
+        run: |
+          rm -f package-lock.json
+          npm i
 
-      - name: Lint the project
+      - name: Lint
         run: npm run lint
 
-      - name: Build the project
+      - name: Build
         run: npm run build
         env:
           CI: true
 
-      #- name: Test the project
-      #  run: npm run test:ci
+      # - name: Test
+      #   run: npm run test:ci
