@@ -67,6 +67,14 @@ This plugin doesn’t expose any new HomeKit devices. It uses Homebridge purely 
 
 Ensure that your Tuya smart plug supports real-time power or voltage display within the Tuya app. Different plugs may have unique Power Value IDs, which can be identified using this plugin’s CLI tool.
 
+### 🔁 Discovery Retries
+
+If a configured device is not immediately found on your LAN, the plugin will keep searching before giving up.
+Each entry in `laundryDevices` supports two optional properties:
+
+- `maxRetries` – number of discovery attempts (default: 5)
+- `retryInterval` – seconds to wait between attempts (default: 60)
+
 ---
 
 ## 🛠️ How to Use the **Tuya Laundry Notify CLI Tool**

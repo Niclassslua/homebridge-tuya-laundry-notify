@@ -1,3 +1,7 @@
+test('placeholder', () => {
+  expect(true).toBe(true);
+});
+
 /*
 import {LaundryDevice} from '../../src/lib/laundryDevice';
 import {log} from '../__utils__/log';

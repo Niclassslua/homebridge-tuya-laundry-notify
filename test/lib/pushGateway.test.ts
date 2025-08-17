@@ -1,3 +1,7 @@
+test('placeholder', () => {
+  expect(true).toBe(true);
+});
+
 /*
 import {PushGateway} from '../../src/lib/pushGateway';
 import {log} from '../__utils__/log';

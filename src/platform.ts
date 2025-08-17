@@ -18,7 +18,7 @@ export class TuyaLaundryNotifyPlatform implements IndependentPlatformPlugin {
   constructor(
     public readonly log: Logger,
     public readonly config: PlatformConfig & NotifyConfig,
-    public readonly api: API
+    public readonly api: API,
   ) {
     this.log.info('TuyaLaundryNotifyPlatform initialized.');
 
@@ -37,7 +37,7 @@ export class TuyaLaundryNotifyPlatform implements IndependentPlatformPlugin {
     }
 
     if (tuyaApiCredentials) {
-      this.log.info(`Tuya API Credentials:`);
+      this.log.info('Tuya API Credentials:');
       this.log.info(`Access ID: ${tuyaApiCredentials.accessId}`);
       this.log.info(`Access Key: ${tuyaApiCredentials.accessKey}`);
       this.log.info(`Username: ${tuyaApiCredentials.username}`);
@@ -111,10 +111,8 @@ export class TuyaLaundryNotifyPlatform implements IndependentPlatformPlugin {
   }
 
   configureAccessory(accessory: PlatformAccessory): void {
-    const deviceName = this.config.name || this.config.deviceId;
-
     const existingDevice = this.laundryDevices.find(laundryDevice =>
-      this.api.hap.uuid.generate(deviceName) === accessory.UUID
+      this.api.hap.uuid.generate(laundryDevice.config.name || laundryDevice.config.deviceId) === accessory.UUID,
     );
 
     if (!existingDevice || !existingDevice.config.exposeStateSwitch) {

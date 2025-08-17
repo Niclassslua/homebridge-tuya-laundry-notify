@@ -17,6 +17,8 @@
           "startDuration": 30,
           "endValue": 300,
           "endDuration": 30,
+          "maxRetries": 5,
+          "retryInterval": 60,
           "startMessage": "⏳ Washing machine started the cycle!",
           "endMessage": "✅ Washing machine finished!"
         }
