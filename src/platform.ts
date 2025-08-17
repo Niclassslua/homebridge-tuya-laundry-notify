@@ -18,7 +18,7 @@ export class TuyaLaundryNotifyPlatform implements IndependentPlatformPlugin {
   constructor(
     public readonly log: Logger,
     public readonly config: PlatformConfig & NotifyConfig,
-    public readonly api: API
+    public readonly api: API,
   ) {
     this.log.info('TuyaLaundryNotifyPlatform initialized.');
 
@@ -29,8 +29,10 @@ export class TuyaLaundryNotifyPlatform implements IndependentPlatformPlugin {
 
     if (laundryDevices && laundryDevices.length > 0) {
       this.log.info('Laundry Devices Found: ${laundryDevices.length}');
-      laundryDevices.forEach((device, index) => {
-        this.log.info('Device ${index + 1}: Name=${device.name}, ID=${device.deviceId}, IP=${device.ipAddress}');
+      laundryDevices.forEach((dev, i) => {
+        this.log.info(
+          `Device ${i + 1}: Name=${dev.name}, ID=${dev.deviceId}, IP=${dev.ipAddress}`,
+        );
       });
     } else {
       this.log.info('No Laundry Devices found.');
@@ -103,7 +105,7 @@ export class TuyaLaundryNotifyPlatform implements IndependentPlatformPlugin {
 
             laundryDevice.init();
           } catch (error) {
-            this.log.error('Failed to init ${laundryDevice.config.name}', error);
+            this.log.error(`Failed to init ${laundryDevice.config.name}`, error);
           }
         }
       }
