@@ -48,4 +48,6 @@ export interface LaundryDeviceConfig {
     endMessage?: string;               // Message sent at the end of the cycle
     exposeStateSwitch?: boolean;       // Option to expose a switch for automation
     protocolVersion?: string;          // Optional protocol version field
+    maxRetries?: number;               // Number of LAN discovery attempts before giving up
+    retryInterval?: number;            // Delay in seconds between discovery attempts
 }

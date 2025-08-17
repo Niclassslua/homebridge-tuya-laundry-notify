@@ -179,17 +179,31 @@
               "required": false,
               "description": "Expected power value when the device finishes the cycle"
             },
-            "endDuration": {
-              "title": "End Duration",
-              "type": "number",
-              "required": false,
-              "description": "Duration in seconds that the end value needs to hold until the device is considered inactive."
-            },
-            "startMessage": {
-              "title": "Start Message",
-              "type": "string",
-              "required": false,
-              "description": "Optional push message when the device starts the cycle",
+              "endDuration": {
+                "title": "End Duration",
+                "type": "number",
+                "required": false,
+                "description": "Duration in seconds that the end value needs to hold until the device is considered inactive."
+              },
+              "maxRetries": {
+                "title": "Max Discovery Retries",
+                "type": "number",
+                "required": false,
+                "description": "Number of times to retry LAN discovery if the device is not found",
+                "default": 5
+              },
+              "retryInterval": {
+                "title": "Retry Interval (seconds)",
+                "type": "number",
+                "required": false,
+                "description": "Seconds to wait between discovery retry attempts",
+                "default": 60
+              },
+              "startMessage": {
+                "title": "Start Message",
+                "type": "string",
+                "required": false,
+                "description": "Optional push message when the device starts the cycle",
               "default": "Washing started..."
             },
             "endMessage": {

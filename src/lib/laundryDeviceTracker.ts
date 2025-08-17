@@ -39,22 +39,42 @@ export class LaundryDeviceTracker {
       return;
     }
 
-    try {
-      const localDevices = await this.smartPlugService.discoverLocalDevices();
-      const selectedDevice = localDevices.find(device => device.deviceId === this.config.deviceId);
+    const maxRetries = this.config.maxRetries ?? 5;
+    const retryInterval = (this.config.retryInterval ?? 60) * 1000; // in ms
+    let attempt = 0;
+    let selectedDevice: any | undefined;
 
-      if (!selectedDevice) {
-        this.log.warn(`Device ${deviceName} not found on LAN.`);
-        return;
+    while (attempt < maxRetries && !selectedDevice) {
+      try {
+        const localDevices = await this.smartPlugService.discoverLocalDevices();
+        selectedDevice = localDevices.find(device => device.deviceId === this.config.deviceId);
+
+        if (!selectedDevice) {
+          attempt++;
+          this.log.warn(`Device ${deviceName} not found on LAN. Attempt ${attempt}/${maxRetries}.`);
+          if (attempt < maxRetries) {
+            this.log.warn(`Retrying in ${retryInterval / 1000} seconds...`);
+            await new Promise(resolve => setTimeout(resolve, retryInterval));
+          }
+        }
+      } catch (error) {
+        attempt++;
+        this.log.error(`Error discovering device ${deviceName}: ${error.message} (attempt ${attempt}/${maxRetries})`);
+        if (attempt < maxRetries) {
+          await new Promise(resolve => setTimeout(resolve, retryInterval));
+        }
       }
-
-      selectedDevice.localKey = this.config.localKey;
-      this.log.info(`Device ${deviceName} found on LAN. Starting power tracking.`);
-      
-      this.detectStartStop(selectedDevice);
-    } catch (error) {
-      this.log.error(`Error initializing device ${deviceName}: ${error.message}`);
     }
+
+    if (!selectedDevice) {
+      this.log.error(`Failed to find device ${deviceName} on LAN after ${maxRetries} attempts.`);
+      return;
+    }
+
+    selectedDevice.localKey = this.config.localKey;
+    this.log.info(`Device ${deviceName} found on LAN. Starting power tracking.`);
+
+    this.detectStartStop(selectedDevice);
   }
 
   private async detectStartStop(selectedDevice: any) {

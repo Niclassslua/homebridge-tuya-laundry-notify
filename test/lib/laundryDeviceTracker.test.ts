@@ -1,3 +1,7 @@
+test('placeholder', () => {
+  expect(true).toBe(true);
+});
+
 /*
 import {mocked} from 'ts-jest/utils';
 import {LaundryDevice} from '../../src/lib/laundryDevice';

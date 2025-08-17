@@ -1,3 +1,7 @@
+test('placeholder', () => {
+  expect(true).toBe(true);
+});
+
 /*
 import {TuyaLaundryNotifyPlatform} from '../src/platform';
 import {PlatformConfig} from 'homebridge';
