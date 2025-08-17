@@ -118,8 +118,8 @@ export class TuyaLaundryNotifyPlatform implements IndependentPlatformPlugin {
   configureAccessory(accessory: PlatformAccessory): void {
     const deviceName = this.config.name || this.config.deviceId;
 
-    const existingDevice = this.laundryDevices.find(laundryDevice =>
-      this.api.hap.uuid.generate(deviceName) === accessory.UUID
+    const existingDevice = this.laundryDevices.find(() =>
+      this.api.hap.uuid.generate(deviceName) === accessory.UUID,
     );
 
     if (!existingDevice || !existingDevice.config.exposeStateSwitch) {
