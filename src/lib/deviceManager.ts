@@ -11,6 +11,13 @@ export class DeviceManager {
 
   async discoverLocalDevices(): Promise<any[]> {
     try {
+      // Reset seen devices before each discovery to allow multiple
+      // sequential discovery runs. Previously, repeated calls would
+      // return no devices because broadcasts from earlier runs were
+      // cached in the set, preventing processing of the same devices
+      // again.
+      this.devicesSeen.clear();
+
       this.log.info('Starting LAN discovery...');
       const localDevicesPort2 = await this.discoverDevices(6667);
       const localDevicesPort1 = await this.discoverDevices(6666);

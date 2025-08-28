@@ -64,6 +64,12 @@ export class SmartPlugService {
 
   async discoverLocalDevices(): Promise<any[]> {
     try {
+      // Reset seen devices for each discovery run so multiple calls can
+      // discover the same devices independently. Without clearing this set,
+      // subsequent discovery attempts would return no results because the
+      // broadcast messages were cached from previous runs.
+      this.devicesSeen.clear();
+
       this.log.info('Starting LAN discovery...');
       const localDevicesPort2 = await this.discoverDevices(6667);
       const localDevicesPort1 = await this.discoverDevices(6666);
