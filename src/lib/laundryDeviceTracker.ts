@@ -27,7 +27,7 @@ export class LaundryDeviceTracker {
     this.log.debug(`Initializing LaundryDeviceTracker with config: ${JSON.stringify(this.config, null, 2)}`);
   }
 
-  public async init() {
+  public async init(localDevices?: any[]) {
     const deviceName = this.config.name || this.config.deviceId;
 
     if (this.config.startValue < this.config.endValue) {
@@ -40,8 +40,8 @@ export class LaundryDeviceTracker {
     }
 
     try {
-      const localDevices = await this.smartPlugService.discoverLocalDevices();
-      const selectedDevice = localDevices.find(device => device.deviceId === this.config.deviceId);
+      const devices = localDevices ?? await this.smartPlugService.discoverLocalDevices();
+      const selectedDevice = devices.find(device => device.deviceId === this.config.deviceId);
 
       if (!selectedDevice) {
         this.log.warn(`Device ${deviceName} not found on LAN.`);
