@@ -36,4 +36,31 @@ describe('LaundryDeviceTracker init with shared discovery', () => {
     expect(smartPlugService.discoverLocalDevices).not.toHaveBeenCalled();
     expect((tracker as any).detectStartStop).toHaveBeenCalledWith(expect.objectContaining({ deviceId: 'dev1' }));
   });
+
+  it('falls back to configured ip when device is not discovered', async () => {
+    const smartPlugService = { discoverLocalDevices: jest.fn() } as any;
+    const messageGateway = { send: jest.fn() } as any;
+    const config: any = {
+      name: 'Trockner',
+      deviceId: 'dev2',
+      localKey: 'key',
+      ipAddress: '1.1.1.2',
+      protocolVersion: '3.4',
+      startValue: 90,
+      startDuration: 10,
+      endValue: 0,
+      endDuration: 60,
+      powerValueId: '19',
+      exposeStateSwitch: false,
+    };
+    const tracker = new LaundryDeviceTracker(log, messageGateway, config, {} as any, smartPlugService);
+    (tracker as any).detectStartStop = jest.fn();
+
+    await tracker.init([]); // empty discovery results
+
+    expect((tracker as any).detectStartStop).toHaveBeenCalledWith(
+      expect.objectContaining({ deviceId: 'dev2', ip: '1.1.1.2', version: '3.4' }),
+    );
+    expect(smartPlugService.discoverLocalDevices).not.toHaveBeenCalled();
+  });
 });

@@ -41,16 +41,29 @@ export class LaundryDeviceTracker {
 
     try {
       const devices = localDevices ?? await this.smartPlugService.discoverLocalDevices();
-      const selectedDevice = devices.find(device => device.deviceId === this.config.deviceId);
+      let selectedDevice = devices.find(device => device.deviceId === this.config.deviceId);
 
       if (!selectedDevice) {
-        this.log.warn(`Device ${deviceName} not found on LAN.`);
-        return;
+        // Fall back to configured IP and protocol version if discovery misses the device
+        if (this.config.ipAddress && this.config.protocolVersion) {
+          this.log.warn(
+            `Device ${deviceName} not found via discovery. Falling back to configured IP ${this.config.ipAddress}.`,
+          );
+          selectedDevice = {
+            deviceId: this.config.deviceId,
+            ip: this.config.ipAddress,
+            version: this.config.protocolVersion,
+          };
+        } else {
+          this.log.warn(`Device ${deviceName} not found on LAN.`);
+          return;
+        }
+      } else {
+        this.log.info(`Device ${deviceName} found on LAN. Starting power tracking.`);
       }
 
       selectedDevice.localKey = this.config.localKey;
-      this.log.info(`Device ${deviceName} found on LAN. Starting power tracking.`);
-      
+
       this.detectStartStop(selectedDevice);
     } catch (error) {
       this.log.error(`Error initializing device ${deviceName}: ${error.message}`);
