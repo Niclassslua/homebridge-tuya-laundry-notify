@@ -1,7 +1,7 @@
 {
   "displayName": "Tuya Laundry Notifications",
   "name": "homebridge-tuya-laundry",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Allows washer/dryer cycle completion notifications using Tuya smart plugs with power meter, now using local control.",
   "license": "Apache-2.0",
   "repository": {
