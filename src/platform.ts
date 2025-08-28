@@ -84,6 +84,9 @@ export class TuyaLaundryNotifyPlatform implements IndependentPlatformPlugin {
       this.ipcServer.start();
 
       if (this.config.laundryDevices) {
+        // Discover devices on the LAN once and share the results between trackers
+        const localDevices = await smartPlugService.discoverLocalDevices();
+
         for (const laundryDevice of this.laundryDevices) {
           try {
             const uuid = this.api.hap.uuid.generate(laundryDevice.config.name || laundryDevice.config.deviceId);
@@ -103,7 +106,7 @@ export class TuyaLaundryNotifyPlatform implements IndependentPlatformPlugin {
               }
             }
 
-            laundryDevice.init();
+            await laundryDevice.init(localDevices);
           } catch (error) {
             this.log.error(
               `Failed to init ${laundryDevice.config.name}`,
