@@ -1,5 +1,6 @@
 import { Logger } from 'homebridge';
 import axios from 'axios';
+import { errorMessage } from './errors';
 
 export interface NtfyConfig {
   title: string; // Ntfy title of the notification
@@ -27,7 +28,7 @@ export class NtfyGateway {
       });
       this.log.debug(`Sent notification to ntfy topic ${this.config.topic}`);
     } catch (error) {
-      this.log.error(`Failed to send notification via ntfy: ${error.message}`);
+      this.log.error(`Failed to send notification via ntfy: ${errorMessage(error)}`);
     }
   }
 }

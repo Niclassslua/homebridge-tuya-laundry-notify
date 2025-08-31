@@ -1,6 +1,8 @@
 import { Logger } from 'homebridge';
 import net from 'net';
 import { DeviceManager } from './deviceManager';
+import { errorMessage } from './errors';
+
 const QuickChart = require('quickchart-js');
 
 class Color {
@@ -154,7 +156,7 @@ export class PowerConsumptionTracker {
       this.log.info(Color.success(`Shortened Chart URL: ${shortUrl}`));
       return shortUrl;
     } catch (error) {
-      this.log.error(Color.error('Error generating shortened chart URL:'), error);
+      this.log.error(Color.error(`Error generating shortened chart URL: ${errorMessage(error)}`));
       return null;
     }
   }
@@ -227,8 +229,9 @@ export class PowerConsumptionTracker {
           this.log.info(Color.info(`Power consumption value for PowerValueId ${powerValueId}: ${powerValue}.`));
           connection.write(Color.info(`Power consumption for device ${deviceId} (PowerValueId ${powerValueId}): ${powerValue} at ${currentTime}.\n`));
         } catch (error) {
-          this.log.error(Color.error(`Error tracking power consumption for device ${deviceId}: ${error.message}`));
-          connection.write(Color.error(`Error tracking power consumption for device ${deviceId}: ${error.message}\n`));
+          const msg = errorMessage(error);
+          this.log.error(Color.error(`Error tracking power consumption for device ${deviceId}: ${msg}`));
+          connection.write(Color.error(`Error tracking power consumption for device ${deviceId}: ${msg}\n`));
           clearInterval(trackingInterval);
         }
       }, this.calculateInterval(duration));
@@ -245,8 +248,9 @@ export class PowerConsumptionTracker {
         }, duration * 1000);
       }
     } catch (error) {
-      this.log.error(Color.error(`Error tracking power consumption for device ${deviceId}: ${error.message}`));
-      connection.write(Color.error(`Error tracking power consumption for device ${deviceId}: ${error.message}\n`));
+      const msg = errorMessage(error);
+      this.log.error(Color.error(`Error tracking power consumption for device ${deviceId}: ${msg}`));
+      connection.write(Color.error(`Error tracking power consumption for device ${deviceId}: ${msg}\n`));
     }
   }
 
