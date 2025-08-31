@@ -3,6 +3,8 @@ import { Logger } from 'homebridge';
 import net from 'net';
 import dgram from 'dgram';
 import crypto from 'crypto';
+import { errorMessage } from './errors';
+
 const QuickChart = require('quickchart-js');
 const fs = require('fs');
 
@@ -38,9 +40,10 @@ export class SmartPlugService {
           log.debug('Disconnected from device.');
         });
 
-        plug.on('error', (error) => {
-          log.error(`Error occurred: ${error.message}`);
-          reject(new Error(`Failed to fetch DPS for device ${device.deviceId}: ${error.message}`));
+        plug.on('error', (error: unknown) => {
+          const msg = errorMessage(error);
+          log.error(`Error occurred: ${msg}`);
+          reject(new Error(`Failed to fetch DPS for device ${device.deviceId}: ${msg}`));
         });
 
         plug.on('data', (data) => {
@@ -56,8 +59,9 @@ export class SmartPlugService {
           reject(new Error(`Timeout: No DPS data received for device ${device.deviceId}`));
         }, 10000);
       } catch (error) {
-        log.error(`Error retrieving status for device ${device.deviceId}: ${error.message}`);
-        reject(new Error(`Failed to fetch DPS for device ${device.deviceId}: ${error.message}`));
+        const msg = errorMessage(error);
+        log.error(`Error retrieving status for device ${device.deviceId}: ${msg}`);
+        reject(new Error(`Failed to fetch DPS for device ${device.deviceId}: ${msg}`));
       }
     });
   }
@@ -92,7 +96,7 @@ export class SmartPlugService {
 
       return allLocalDevices;
     } catch (error) {
-      this.log.error(`Error discovering local devices: ${error.message}`);
+      this.log.error(`Error discovering local devices: ${errorMessage(error)}`);
 
       if (this.cachedDevices.length > 0) {
         this.log.info('Returning cached devices after error.');
@@ -117,7 +121,7 @@ export class SmartPlugService {
         try {
           data = Buffer.from(this.decryptUDP(data));
         } catch (e) {
-          this.log.error('Error decrypting UDP message:', e.message);
+          this.log.error(`Error decrypting UDP message: ${errorMessage(e)}`);
           return;
         }
 
@@ -129,7 +133,7 @@ export class SmartPlugService {
             version: jsonData.version,
           });
         } catch (err) {
-          this.log.error('Error parsing device data:', err.message);
+          this.log.error(`Error parsing device data: ${errorMessage(err)}`);
         }
       });
 
@@ -141,86 +145,6 @@ export class SmartPlugService {
         }, 5000);
       });
     });
-  }
-
-  // Method to match local devices with cloud devices
-  async matchLocalWithCloudDevices(localDevices: any[]): Promise<any[]> {
-    try {
-      this.log.info('Fetching devices from Tuya Cloud for comparison...');
-
-      // Fetch cloud devices
-      const cloudDevices = await this.getCloudDevices();
-      if (cloudDevices.length === 0) {
-        this.log.warn('No devices found in Tuya Cloud.');
-        return [];
-      }
-
-      // Match local devices with cloud devices by their deviceId
-      const matchedDevices = localDevices
-        .map((localDevice) => {
-          const cloudDevice = cloudDevices.find((device) => device.deviceId === localDevice.deviceId);
-          if (cloudDevice) {
-            this.log.info(`Matched local device ${localDevice.deviceId} with cloud device ${cloudDevice.deviceId}.`);
-            return { ...localDevice, ...cloudDevice }; // Merge local and cloud data
-          }
-          return null;
-        })
-        .filter((device) => device !== null); // Remove null entries
-
-      if (matchedDevices.length === 0) {
-        this.log.info('No matching devices found.');
-      } else {
-        this.log.info(`Matched ${matchedDevices.length} devices with the Tuya Cloud.`);
-      }
-
-      return matchedDevices;
-    } catch (error) {
-      this.log.error(`Error matching devices with Tuya Cloud: ${error.message}`);
-      return [];
-    }
-  }
-
-  private async getCloudDevices(): Promise<any[]> {
-    try {
-      this.log.debug('Starting to fetch cloud devices from Tuya API...');
-
-      // Anfrage an die Tuya API senden
-      const devicesResponse = await this.apiInstance.get('/v1.0/iot-01/associated-users/devices');
-      this.log.debug('Response from Tuya API received:', devicesResponse);
-
-      // Überprüfen, ob die Anfrage erfolgreich war
-      if (!devicesResponse.success) {
-        this.log.error(`Fetching cloud devices failed. code=${devicesResponse.code}, msg=${devicesResponse.msg}`);
-        return [];
-      }
-
-      this.log.debug(`Total devices received from cloud: ${devicesResponse.result.devices.length}`);
-
-      // Filtern der Geräte nach Kategorie 'cz' und Mapping der relevanten Informationen
-      const filteredDevices = devicesResponse.result.devices
-        .filter((device: any) => {
-          const isCategoryCZ = device.category === 'cz';
-          this.log.debug(`Device ${device.id} category=${device.category}, isCategoryCZ=${isCategoryCZ}`);
-          return isCategoryCZ;
-        })
-        .map((device: any) => {
-          const deviceInfo = {
-            displayName: device.name,
-            deviceId: device.id,
-            localKey: device.local_key,
-            category: device.category,
-          };
-          this.log.debug(`Mapped device info: ${JSON.stringify(deviceInfo)}`);
-          return deviceInfo;
-        });
-
-      this.log.debug(`Filtered and mapped ${filteredDevices.length} devices from the cloud.`);
-      return filteredDevices;
-
-    } catch (error) {
-      this.log.error('Error fetching cloud devices:', error.message);
-      return [];
-    }
   }
 
   private decryptUDP(msg: Buffer): string {
@@ -319,8 +243,9 @@ export class SmartPlugService {
           this.log.info(`Power consumption value for PowerValueId ${powerValueId}: ${powerValue}.`);
           connection.write(`Power consumption for device ${deviceId} (PowerValueId ${powerValueId}): ${powerValue} at ${currentTime}.\n`);
         } catch (error) {
-          this.log.error(`Error tracking power consumption for device ${deviceId}: ${error.message}`);
-          connection.write(`Error tracking power consumption for device ${deviceId}: ${error.message}\n`);
+          const msg = errorMessage(error);
+          this.log.error(`Error tracking power consumption for device ${deviceId}: ${msg}`);
+          connection.write(`Error tracking power consumption for device ${deviceId}: ${msg}\n`);
           clearInterval(trackingInterval);
         }
       }, this.calculateInterval(duration));
@@ -337,8 +262,9 @@ export class SmartPlugService {
         }, duration * 1000);
       }
     } catch (error) {
-      this.log.error(`Error tracking power consumption for device ${deviceId}: ${error.message}`);
-      connection.write(`Error tracking power consumption for device ${deviceId}: ${error.message}\n`);
+      const msg = errorMessage(error);
+      this.log.error(`Error tracking power consumption for device ${deviceId}: ${msg}`);
+      connection.write(`Error tracking power consumption for device ${deviceId}: ${msg}\n`);
     }
   }
 

@@ -3,6 +3,7 @@ import { API, Logger, PlatformAccessory } from 'homebridge';
 import { DateTime } from 'luxon';
 import { MessageGateway } from './messageGateway';
 import { SmartPlugService } from './smartPlugService';
+import { errorMessage } from './errors';
 
 export class LaundryDeviceTracker {
   private startDetected?: boolean;
@@ -53,7 +54,7 @@ export class LaundryDeviceTracker {
       
       this.detectStartStop(selectedDevice);
     } catch (error) {
-      this.log.error(`Error initializing device ${deviceName}: ${error.message}`);
+      this.log.error(`Error initializing device ${deviceName}: ${errorMessage(error)}`);
     }
   }
 
@@ -75,7 +76,7 @@ export class LaundryDeviceTracker {
         await this.checkStartStopConditions(deviceName, powerValue);
 
       } catch (error) {
-        this.log.error(`Error during start/stop detection: ${error.message}`);
+        this.log.error(`Error during start/stop detection: ${errorMessage(error)}`);
       }
     }, this.currentInterval);
   }

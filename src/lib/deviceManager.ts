@@ -2,6 +2,7 @@ import TuyAPI from 'tuyapi';
 import { Logger } from 'homebridge';
 import dgram from 'dgram';
 import crypto from 'crypto';
+import { errorMessage } from './errors';
 
 export class DeviceManager {
   private devicesSeen = new Set<string>();
@@ -40,7 +41,7 @@ export class DeviceManager {
 
       return allLocalDevices;
     } catch (error) {
-      this.log.error(`Error discovering local devices: ${error.message}`);
+      this.log.error(`Error discovering local devices: ${errorMessage(error)}`);
 
       if (this.cachedDevices.length > 0) {
         this.log.info('Returning cached devices after error.');
@@ -65,7 +66,7 @@ export class DeviceManager {
         try {
           data = Buffer.from(this.decryptUDP(data));
         } catch (e) {
-          this.log.error('Error decrypting UDP message:', e.message);
+          this.log.error(`Error decrypting UDP message: ${errorMessage(e)}`);
           return;
         }
 
@@ -77,7 +78,7 @@ export class DeviceManager {
             version: jsonData.version,
           });
         } catch (err) {
-          this.log.error('Error parsing device data:', err.message);
+          this.log.error(`Error parsing device data: ${errorMessage(err)}`);
         }
       });
 
@@ -123,7 +124,7 @@ export class DeviceManager {
 
       return matchedDevices;
     } catch (error) {
-      this.log.error(`Error matching devices with Tuya Cloud: ${error.message}`);
+      this.log.error(`Error matching devices with Tuya Cloud: ${errorMessage(error)}`);
       return [];
     }
   }
@@ -163,7 +164,7 @@ export class DeviceManager {
       return filteredDevices;
 
     } catch (error) {
-      this.log.error('Error fetching cloud devices:', error.message);
+      this.log.error(`Error fetching cloud devices: ${errorMessage(error)}`);
       return [];
     }
   }
@@ -203,9 +204,10 @@ export class DeviceManager {
           this.log.debug('Disconnected from device.');
         });
 
-        plug.on('error', (error) => {
-          this.log.error(`Error occurred: ${error.message}`);
-          reject(new Error(`Failed to fetch DPS for device ${device.deviceId}: ${error.message}`));
+        plug.on('error', (error: unknown) => {
+          const msg = errorMessage(error);
+          this.log.error(`Error occurred: ${msg}`);
+          reject(new Error(`Failed to fetch DPS for device ${device.deviceId}: ${msg}`));
         });
 
         plug.on('data', (data) => {
@@ -221,8 +223,9 @@ export class DeviceManager {
           reject(new Error(`Timeout: No DPS data received for device ${device.deviceId}`));
         }, 10000);
       } catch (error) {
-        this.log.error(`Error retrieving status for device ${device.deviceId}: ${error.message}`);
-        reject(new Error(`Failed to fetch DPS for device ${device.deviceId}: ${error.message}`));
+        const msg = errorMessage(error);
+        this.log.error(`Error retrieving status for device ${device.deviceId}: ${msg}`);
+        reject(new Error(`Failed to fetch DPS for device ${device.deviceId}: ${msg}`));
       }
     });
   }
