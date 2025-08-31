@@ -205,6 +205,13 @@
               "required": false,
               "description": "Creates dummy switch that will indicate the current device status, useful for extra automation",
               "default": false
+            },
+            "exportPowerLog": {
+              "title": "Export Power Log",
+              "type": "boolean",
+              "required": false,
+              "description": "Write detailed power measurements for each cycle to logs/<deviceId>-<timestamp>.json",
+              "default": false
             }
           }
         }

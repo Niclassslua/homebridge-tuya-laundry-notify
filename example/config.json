@@ -18,7 +18,8 @@
           "endValue": 300,
           "endDuration": 30,
           "startMessage": "⏳ Washing machine started the cycle!",
-          "endMessage": "✅ Washing machine finished!"
+          "endMessage": "✅ Washing machine finished!",
+          "exportPowerLog": true
         }
       ]
     }

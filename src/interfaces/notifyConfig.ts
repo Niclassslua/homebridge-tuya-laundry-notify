@@ -48,4 +48,5 @@ export interface LaundryDeviceConfig {
     endMessage?: string;               // Message sent at the end of the cycle
     exposeStateSwitch?: boolean;       // Option to expose a switch for automation
     protocolVersion?: string;          // Optional protocol version field
+    exportPowerLog?: boolean;          // Whether to export detailed power logs
 }

@@ -23,6 +23,7 @@
 - [How Does the Tool Ensure Accuracy?](#%EF%B8%8F-how-does-the-tool-ensure-accuracy)
 - [How LAN Interaction Works](#-how-lan-interaction-works-)
 - [kWh Calculation: Why It Works](#-kwh-calculation-why-it-works-)
+- [Power Log Export](#-power-log-export)
 - [Telegram Setup](#-telegram-setup)
 - [Pushed.co Setup](#-pushedco-setup)
 - [ntfy Setup](#-ntfy-setup)
@@ -251,11 +252,62 @@ The plugin calculates your appliance’s energy consumption in **kilowatt-hours 
 
 ### 🌟 **Why It Matters**
 
-- **Monitor Costs**: Know your appliance’s electricity usage.  
-- **Spot Inefficiencies**: Identify unusual consumption.  
+- **Monitor Costs**: Know your appliance’s electricity usage.
+- **Spot Inefficiencies**: Identify unusual consumption.
 - **Stay Sustainable**: Reduce and optimize energy use. 🌍💡
 
---- 
+---
+
+## 🗒️ Power Log Export
+
+Enable detailed measurement logging by setting `exportPowerLog` to `true`
+for a device in your Homebridge config. When enabled, every polled power
+value is recorded and, after each completed cycle, written to
+`logs/<deviceId>-<ISO_TIMESTAMP>.json`. The exported file contains
+metadata about the cycle and a `powerLog` array with the collected
+measurements.
+
+```json
+{
+  "laundryDevices": [
+    {
+      "deviceId": "your-device-id",
+      "localKey": "your-local-key",
+      "powerValueId": "19",
+      "exportPowerLog": true
+    }
+  ]
+}
+```
+
+### Example
+
+```json
+{
+  "startTime": "2024-05-05T12:00:00.000Z",
+  "endTime": "2024-05-05T12:30:00.000Z",
+  "durationSec": 1800,
+  "minPower": 5.2,
+  "maxPower": 120.4,
+  "avgPower": 60.1,
+  "totalKWh": 0.34,
+  "powerLog": [
+    {
+      "timestamp": "2024-05-05T12:00:01.000Z",
+      "watt": 10.5,
+      "deltaWs": 10.5,
+      "totalKWh": 0.000003,
+      "isActive": true,
+      "interval": 1000,
+      "rawDps": {"19": 105},
+      "voltage": 2300,
+      "current": 50
+    }
+  ]
+}
+```
+
+---
 
 ## 📡 Push Notifications Setup 🚀
 
