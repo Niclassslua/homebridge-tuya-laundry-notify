@@ -294,7 +294,7 @@ export class LaundryDeviceTracker {
       this.log.info(`Exported power log to ${filePath}`);
       this.powerLog = [];
     } catch (error) {
-      this.log.error(`Failed to export power log: ${error.message}`);
+      this.log.error(`Failed to export power log: ${errorMessage(error)}`);
     }
   }
 }
