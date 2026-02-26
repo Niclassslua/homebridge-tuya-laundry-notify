@@ -49,4 +49,10 @@ export interface LaundryDeviceConfig {
     exposeStateSwitch?: boolean;       // Option to expose a switch for automation
     protocolVersion?: string;          // Optional protocol version field
     exportPowerLog?: boolean;          // Whether to export detailed power logs
+    // Optional: distinguish full cycles from short after-run cycles (e.g. dryer cool-down)
+    minRunDurationSec?: number;       // Minimum run duration (seconds) to count as a full cycle
+    minRunKWh?: number;                // Minimum energy (kWh) to count as a full cycle
+    minRunAvgPowerW?: number;          // Minimum average power (W) to count as a full cycle
+    afterRunWindowMin?: number;        // Minutes after a full cycle end during which start is only confirmed once min criteria are met (avoids false start on after-run power spikes)
+    dryRun?: boolean;                  // If true: no notifications; log each run and write suggested thresholds to logs for config
 }

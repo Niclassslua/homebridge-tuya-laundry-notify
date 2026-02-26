@@ -212,6 +212,37 @@
               "required": false,
               "description": "Write detailed power measurements for each cycle to logs/<deviceId>-<timestamp>.json",
               "default": false
+            },
+            "minRunDurationSec": {
+              "title": "Min Run Duration (sec)",
+              "type": "number",
+              "required": false,
+              "description": "Minimum run duration in seconds to count as a real cycle (e.g. for dryers: ignore short after-run bursts)."
+            },
+            "minRunKWh": {
+              "title": "Min Run Energy (kWh)",
+              "type": "number",
+              "required": false,
+              "description": "Minimum energy in kWh to count as a full cycle. Used with min run duration to ignore short after-run cycles (e.g. dryer cool-down)."
+            },
+            "minRunAvgPowerW": {
+              "title": "Min Run Avg Power (W)",
+              "type": "number",
+              "required": false,
+              "description": "Minimum average power in watts to count as a real cycle. Optional additional criterion."
+            },
+            "afterRunWindowMin": {
+              "title": "After-run window (min)",
+              "type": "number",
+              "required": false,
+              "description": "Minutes after a full cycle end during which a new start is only confirmed once min duration/kWh are reached (avoids false start on dryer after-run spikes)."
+            },
+            "dryRun": {
+              "title": "Dry Run (learn thresholds)",
+              "type": "boolean",
+              "required": false,
+              "description": "If enabled: no notifications are sent; each run is logged with duration, kWh, avg power; suggested minRunDurationSec/minRunKWh/minRunAvgPowerW are written to logs/dry-run-<deviceId>.json so you can copy them into your config.",
+              "default": false
             }
           }
         }
