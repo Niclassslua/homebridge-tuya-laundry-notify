@@ -24,6 +24,7 @@
 - [How LAN Interaction Works](#-how-lan-interaction-works-)
 - [kWh Calculation: Why It Works](#-kwh-calculation-why-it-works-)
 - [Power Log Export](#-power-log-export)
+- [Dryer and short-cycle handling](#-dryer-and-short-cycle-handling)
 - [Telegram Setup](#-telegram-setup)
 - [Pushed.co Setup](#-pushedco-setup)
 - [ntfy Setup](#-ntfy-setup)
@@ -37,6 +38,8 @@
 - Real-time monitoring of laundry appliance power consumption via Tuya Smart Plugs.
 - Notifications for appliance start and stop cycles.
 - Easy calibration for precise cycle detection.
+- **Dryer support**: Optional min-run thresholds and after-run window so short cool-down cycles don’t trigger extra notifications.
+- **Dry run mode**: Learn thresholds from a real run; suggested values are written to a log file for copy-paste into config.
 - CLI tool for identifying Power Value IDs and tracking power usage.
 
 ---
@@ -306,6 +309,21 @@ measurements.
   ]
 }
 ```
+
+---
+
+## 🧺 Dryer and short-cycle handling
+
+For **dryers**, short after-run cycles (cool-down, extra tumble) can trigger repeated start/stop notifications. You can avoid that with optional per-device settings:
+
+| Option | Description |
+|--------|-------------|
+| `minRunDurationSec` | Minimum run duration (seconds) to count as a full cycle. |
+| `minRunKWh` | Minimum energy (kWh) to count as a full cycle. |
+| `minRunAvgPowerW` | Minimum average power (W) to count as a full cycle. |
+| `afterRunWindowMin` | Minutes after a full cycle end during which a new “start” is only confirmed once min criteria are met. |
+
+Set **`dryRun: true`** for a device to **learn thresholds**: no notifications are sent; each run is logged and suggested values are written to `logs/dry-run-<deviceId>.json`. Copy the suggested values into your config, then set `dryRun` back to `false`.
 
 ---
 
