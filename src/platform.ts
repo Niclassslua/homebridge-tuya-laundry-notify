@@ -85,7 +85,8 @@ export class TuyaLaundryNotifyPlatform implements IndependentPlatformPlugin {
         this.ipcServer = new IPCServer(this.log, this.config, this.tuyaApiService);
         this.ipcServer.start();
         this.log.info(
-          'CLI tool is active. When you\'re done with setup, consider disabling it in plugin settings (enableIpcServer: false) to close the IPC socket.',
+          'CLI tool is active. When you\'re done with setup, consider disabling it in plugin settings ' +
+            '(enableIpcServer: false) to close the IPC socket.',
         );
       }
 
