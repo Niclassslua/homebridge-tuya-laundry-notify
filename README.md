@@ -86,6 +86,8 @@ socat - UNIX-CONNECT:/tmp/tuya-laundry.sock
 
 Once connected, you'll be greeted with an interactive command prompt.
 
+**When you're done with setup**, consider disabling the CLI tool in the plugin settings (`enableIpcServer: false`) so the IPC socket is closed and not left open.
+
 ---
 
 ## 🧩 How Does the CLI Tool Work?

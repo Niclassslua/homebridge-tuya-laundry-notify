@@ -16,6 +16,8 @@ export interface NotifyConfig {
     };
     laundryDevices?: LaundryDeviceConfig[];
     tuyaApiCredentials?: TuyaApiCredentials;
+    /** If true or unset, the CLI IPC server is started (default). Set to false to disable the socket after setup. */
+    enableIpcServer?: boolean;
 }
 
 export interface PushedConfig {

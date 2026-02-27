@@ -14,6 +14,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   - `minRunAvgPowerW`: minimum average power (W) to count as a full cycle
   - `afterRunWindowMin`: minutes after a full cycle end during which a new "start" is only confirmed once min criteria are met (avoids false start on after-run power spikes)
 - **Dry run (learn thresholds)**: New option `dryRun`. When enabled, no notifications are sent; each run is logged with duration, kWh, and power stats, and suggested threshold values are written to `logs/dry-run-<deviceId>.json` so you can copy them into your config.
+- **CLI tool (IPC server) toggle**: New option `enableIpcServer` (default: true). When disabled, the CLI socket is not started. A startup notice reminds you to disable it in plugin settings when you're done with setup.
 
 ### Changed
 

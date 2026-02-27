@@ -80,8 +80,14 @@ export class TuyaLaundryNotifyPlatform implements IndependentPlatformPlugin {
         return;
       }
 
-      this.ipcServer = new IPCServer(this.log, this.config, this.tuyaApiService);
-      this.ipcServer.start();
+      const enableIpcServer = this.config.enableIpcServer !== false;
+      if (enableIpcServer) {
+        this.ipcServer = new IPCServer(this.log, this.config, this.tuyaApiService);
+        this.ipcServer.start();
+        this.log.info(
+          'CLI tool is active. When you\'re done with setup, consider disabling it in plugin settings (enableIpcServer: false) to close the IPC socket.',
+        );
+      }
 
       if (this.config.laundryDevices) {
         // Discover devices on the LAN once and share the results between trackers

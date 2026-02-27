@@ -5,6 +5,13 @@
   "schema": {
     "type": "object",
     "properties": {
+      "enableIpcServer": {
+        "title": "Enable CLI tool (IPC server)",
+        "type": "boolean",
+        "required": false,
+        "description": "When enabled (default), the CLI tool is available via a local socket for discover, track, and exportConfig. Disable this in plugin settings when you're done with setup to close the socket.",
+        "default": true
+      },
       "tuyaApiCredentials": {
         "title": "Tuya API Credentials",
         "type": "object",
